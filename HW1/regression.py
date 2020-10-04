@@ -11,6 +11,16 @@ def compute_x(A_loc: List[List[float]], b_loc: List[float]) -> List[float]:
     :param b_loc: vector b
     :return: vector x
     """
+    transposed_A = list(map(list, zip(*A)))
+    symmetric_matrix = multiply_matrix(transposed_A, A)
+    pp.pprint(symmetric_matrix)
+    for i in range(len(symmetric_matrix)):
+        symmetric_matrix[i][i] += lam
+    pp.pprint(symmetric_matrix)
+    L_com, U_com = compute_LU(symmetric_matrix)
+    pp.pprint(L_com)
+    pp.pprint(U_com)
+    # TODO the rest
 
 
 def multiply_matrix(u: List[List[float]], v: List[List[float]]) -> List[List[float]] or List[float] or None:
@@ -25,15 +35,10 @@ def multiply_matrix(u: List[List[float]], v: List[List[float]]) -> List[List[flo
         return None
 
     # Compute result
-    result = []
-    num_u_row = len(u)
-    num_v_col = len(v[0])
-    num_vec_multiplication = len(v)
-    for row in range(num_u_row):
-        partial_result = []
-        for col in range(num_v_col):
-            partial_result.append(sum(u[row][i] * v[i][col] for i in range(num_vec_multiplication)))
-        result.append(partial_result)
+    u_row = len(u)
+    v_col = len(v[0])
+    vec_multi = len(v)
+    result = [[sum(u[row][i] * v[i][col] for i in range(vec_multi)) for col in range(v_col)] for row in range(u_row)]
     if len(result) == 1:
         result = result[0]
 
@@ -99,4 +104,6 @@ if __name__ == '__main__':
     A = [[points[row][0] ** t for t in range(n, -1, -1)] for row in range(len(points))]
     b = [p[1] for p in points]
     pp = pprint.PrettyPrinter()
-    pp.pprint(A)
+    # pp.pprint(A)
+
+    compute_x(A, b)

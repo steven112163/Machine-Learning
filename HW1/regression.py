@@ -16,6 +16,8 @@ def compute_x(A_loc: List[List[float]], b_loc: List[float]) -> List[float]:
     for i in range(len(symmetric_matrix)):
         symmetric_matrix[i][i] += lam
     L_com, U_com = compute_LU(symmetric_matrix)
+    L_com_inverse = compute_L_inverse(L_com)
+    U_com_inverse = compute_U_inverse(U_com)
     # TODO the rest
 
 
@@ -72,8 +74,16 @@ def compute_L_inverse(L: List[List[float]]) -> List[List[float]] or None:
     :param L: lower triangular matrix
     :return: inverse of lower triangular matrix
     """
-    # Get dimension and setup L_inverse with inverted diagonals
+    # Get dimension
     dim = len(L)
+    if dim <= 1:
+        # L is not a lower triangular matrix
+        return None
+    elif dim != len(L[0]):
+        # L is not a square matrix
+        return None
+
+    # Setup L_inverse with inverted diagonals
     L_inverse = [[0.0 for _ in range(dim)] for _ in range(dim)]
     for i in range(dim):
         if L[i][i] == 0.0:
@@ -84,11 +94,10 @@ def compute_L_inverse(L: List[List[float]]) -> List[List[float]] or None:
     # Invert remaining elements
     for row in range(1, dim):
         for col in range(row):
-            print(f'==={row}, {col}===')
-            L_inverse[row][col] = -sum(L[row][i]*L_inverse[i][col] for i in range(row)) / L[row][row]
-            pp.pprint(L_inverse)
+            L_inverse[row][col] = -sum(L[row][i] * L_inverse[i][col] for i in range(row)) / L[row][row]
 
     return L_inverse
+
 
 def compute_U_inverse(U: List[List[float]]) -> List[List[float]] or None:
     """
@@ -96,8 +105,16 @@ def compute_U_inverse(U: List[List[float]]) -> List[List[float]] or None:
     :param U: upper triangular matrix
     :return: inverse of upper triangular matrix
     """
-    # Get dimension and setup U_inverse with inverted diagonals
+    # Get dimension
     dim = len(U)
+    if dim <= 1:
+        # U is not an upper triangular matrix
+        return None
+    elif dim != len(U[0]):
+        # U is not a square matrix
+        return None
+
+    # Setup U_inverse with inverted diagonals
     U_inverse = [[0.0 for _ in range(dim)] for _ in range(dim)]
     for i in range(dim):
         if U[i][i] == 0.0:
@@ -106,13 +123,12 @@ def compute_U_inverse(U: List[List[float]]) -> List[List[float]] or None:
         U_inverse[i][i] = 1.0 / U[i][i]
 
     # Invert remaining elements
-    for row in range(dim - 2, 0, -1):
+    for row in range(dim - 2, -1, -1):
         for col in range(dim - 1, row, -1):
-            print(f'==={row}, {col}===')
-            U_inverse[row][col] = -sum(U[row][i]*U_inverse[i][col] for i in range(row)) / U[row][row]
-            pp.pprint(U_inverse)
+            U_inverse[row][col] = -sum(U[row][i] * U_inverse[i][col] for i in range(col, row - 1, -1)) / U[row][row]
 
     return U_inverse
+
 
 def parse_arguments():
     """
@@ -151,4 +167,3 @@ if __name__ == '__main__':
     # pp.pprint(A)
 
     compute_x(A, b)
-    U_in_com = compute_U_inverse([[5.0, 4.0, 3.0], [0.0, 5.0, 2.0], [0.0, 0.0, 5.0]])

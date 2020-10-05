@@ -13,13 +13,9 @@ def compute_x(A_loc: List[List[float]], b_loc: List[float]) -> List[float]:
     """
     transposed_A = list(map(list, zip(*A)))
     symmetric_matrix = multiply_matrix(transposed_A, A)
-    pp.pprint(symmetric_matrix)
     for i in range(len(symmetric_matrix)):
         symmetric_matrix[i][i] += lam
-    pp.pprint(symmetric_matrix)
     L_com, U_com = compute_LU(symmetric_matrix)
-    pp.pprint(L_com)
-    pp.pprint(U_com)
     # TODO the rest
 
 
@@ -70,6 +66,54 @@ def compute_LU(mat: List[List[float]]) -> Tuple[List[List[float]], List[List[flo
     return L, U
 
 
+def compute_L_inverse(L: List[List[float]]) -> List[List[float]] or None:
+    """
+    Compute inverse of lower triangular matrix
+    :param L: lower triangular matrix
+    :return: inverse of lower triangular matrix
+    """
+    # Get dimension and setup L_inverse with inverted diagonals
+    dim = len(L)
+    L_inverse = [[0.0 for _ in range(dim)] for _ in range(dim)]
+    for i in range(dim):
+        if L[i][i] == 0.0:
+            # L is singular
+            return None
+        L_inverse[i][i] = 1.0 / L[i][i]
+
+    # Invert remaining elements
+    for row in range(1, dim):
+        for col in range(row):
+            print(f'==={row}, {col}===')
+            L_inverse[row][col] = -sum(L[row][i]*L_inverse[i][col] for i in range(row)) / L[row][row]
+            pp.pprint(L_inverse)
+
+    return L_inverse
+
+def compute_U_inverse(U: List[List[float]]) -> List[List[float]] or None:
+    """
+    Compute inverse of upper triangular matrix
+    :param U: upper triangular matrix
+    :return: inverse of upper triangular matrix
+    """
+    # Get dimension and setup U_inverse with inverted diagonals
+    dim = len(U)
+    U_inverse = [[0.0 for _ in range(dim)] for _ in range(dim)]
+    for i in range(dim):
+        if U[i][i] == 0.0:
+            # U is singular
+            return None
+        U_inverse[i][i] = 1.0 / U[i][i]
+
+    # Invert remaining elements
+    for row in range(dim - 2, 0, -1):
+        for col in range(dim - 1, row, -1):
+            print(f'==={row}, {col}===')
+            U_inverse[row][col] = -sum(U[row][i]*U_inverse[i][col] for i in range(row)) / U[row][row]
+            pp.pprint(U_inverse)
+
+    return U_inverse
+
 def parse_arguments():
     """
     Setup an ArgumentParser and get arguments from command-line
@@ -107,3 +151,4 @@ if __name__ == '__main__':
     # pp.pprint(A)
 
     compute_x(A, b)
+    U_in_com = compute_U_inverse([[5.0, 4.0, 3.0], [0.0, 5.0, 2.0], [0.0, 0.0, 5.0]])

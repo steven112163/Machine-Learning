@@ -4,21 +4,33 @@ import pprint
 from typing import List, Tuple
 
 
-def compute_x(A_loc: List[List[float]], b_loc: List[float]) -> List[float]:
+def compute_x(A_loc: List[List[float]], b_loc: List[List[float]]) -> List[List[float]]:
     """
     Compute vector x from matrix A, vector b and lambda
     :param A_loc: matrix A
     :param b_loc: vector b
     :return: vector x
     """
-    transposed_A = list(map(list, zip(*A)))
-    symmetric_matrix = multiply_matrix(transposed_A, A)
-    for i in range(len(symmetric_matrix)):
-        symmetric_matrix[i][i] += lam
-    L_com, U_com = compute_LU(symmetric_matrix)
+    At = transpose_matrix(A_loc)
+    AtA = multiply_matrix(At, A_loc)
+    for i in range(len(AtA)):
+        AtA[i][i] += lam
+    L_com, U_com = compute_LU(AtA)
     L_com_inverse = compute_L_inverse(L_com)
     U_com_inverse = compute_U_inverse(U_com)
-    # TODO the rest
+    AtA_inverse = multiply_matrix(U_com_inverse, L_com_inverse)
+    AtA_inverse_At = multiply_matrix(AtA_inverse, At)
+    result = multiply_matrix(AtA_inverse_At, b_loc)
+    return result
+
+
+def transpose_matrix(mat: List[List[float]]) -> List[List[float]]:
+    """
+    Transpose the given matrix
+    :param mat: matrix needs transposition
+    :return: transpose matrix
+    """
+    return list(map(list, zip(*mat)))
 
 
 def multiply_matrix(u: List[List[float]], v: List[List[float]]) -> List[List[float]] or List[float] or None:
@@ -130,6 +142,20 @@ def compute_U_inverse(U: List[List[float]]) -> List[List[float]] or None:
     return U_inverse
 
 
+def compute_error(A_loc: List[List[float]], x_loc: List[List[float]], b_loc: List[List[float]]):
+    """
+    Compute total error
+    :param A_loc: matrix A_loc containing x value of all points
+    :param x_loc: vector x_loc containing all coefficients
+    :param b_loc: vector b_loc containing y value of all points
+    :return: total error
+    """
+    Ax = multiply_matrix(A_loc, x_loc)
+    error_vec = [[Ax[i][0] - b_loc[i][0]] for i in range(len(Ax))]
+    error = multiply_matrix(transpose_matrix(error_vec), error_vec)
+    return error
+
+
 def parse_arguments():
     """
     Setup an ArgumentParser and get arguments from command-line
@@ -161,9 +187,11 @@ if __name__ == '__main__':
     file.close()
 
     # Setup matrix A and vector b
-    A = [[points[row][0] ** t for t in range(n, -1, -1)] for row in range(len(points))]
-    b = [p[1] for p in points]
+    A = [[points[row][0] ** t for t in range(n - 1, -1, -1)] for row in range(len(points))]
+    b = [[p[1]] for p in points]
     pp = pprint.PrettyPrinter()
-    # pp.pprint(A)
 
-    compute_x(A, b)
+    LSE_result = compute_x(A, b)
+    pp.pprint(LSE_result)
+    LSE_error = compute_error(A, LSE_result, b)
+    pp.pprint(LSE_error)

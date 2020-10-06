@@ -338,22 +338,35 @@ def show_result(result: List[List[float]], error: List[float], ty: str) -> None:
     print(f'Total error: {error[0]: .11f}')
 
 
-def plot(p: List[List[float]], LSE: List[List[float]]) -> None:
+def plot(p: List[List[float]], LSE: List[List[float]], Newton: List[List[float]]) -> None:
     """
     Plot the result
     :param p: matrix containing points
     :param LSE: LSE result
+    :param Newton: result of Newton's method
     :return: None
     """
+    # Get x axis
     transposed = transpose_matrix(p)
     x = np.arange(start=min(transposed[0]) - 1.0, stop=max(transposed[0]) + 1.0, step=0.01)
+
+    # Get value corresponds to each x respectively
     LSE_y = 0
+    Newton_y = 0
     for degree in range(n - 1, -1, -1):
         LSE_y += LSE[n - 1 - degree][0] * (x ** degree)
+        Newton_y += Newton[n - 1 - degree][0] * (x ** degree)
+
+    # Plot LSE
     plt.figure(1)
     plt.subplot(211)
     plt.scatter(transposed[0], transposed[1], c='r', edgecolors='k')
     plt.plot(x, LSE_y, c='k')
+
+    # Plot Newton
+    plt.subplot(212)
+    plt.scatter(transposed[0], transposed[1], c='r', edgecolors='k')
+    plt.plot(x, Newton_y, c='k')
     plt.show()
 
 
@@ -395,4 +408,4 @@ if __name__ == '__main__':
         show_result(Newton_result, Newton_error, "Newton's Method")
 
     # Plot
-    plot(points, LSE_result)
+    plot(points, LSE_result, Newton_result)

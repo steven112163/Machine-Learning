@@ -1,27 +1,59 @@
 import argparse
+import sys
 import csv
 import pprint
 from typing import List, Tuple
 
 
-def compute_x(A_loc: List[List[float]], b_loc: List[List[float]]) -> List[List[float]]:
+def compute_LSE(A_loc: List[List[float]], b_loc: List[List[float]]) -> Tuple[List[List[float]], List[float]] or Tuple[
+    None, None]:
     """
     Compute vector x from matrix A, vector b and lambda
     :param A_loc: matrix A
     :param b_loc: vector b
     :return: vector x
     """
+    # Calculate transpose A times A
+    info_log('Calculate At')
     At = transpose_matrix(A_loc)
+    info_log('Calculate AtA')
     AtA = multiply_matrix(At, A_loc)
+    if not AtA:
+        # Shouldn't reach here
+        error_log('Dimension does not match between At and A')
+        return None, None
+
+    # Add lambda to AtA
     for i in range(len(AtA)):
         AtA[i][i] += lam
-    L_com, U_com = compute_LU(AtA)
-    L_com_inverse = compute_L_inverse(L_com)
-    U_com_inverse = compute_U_inverse(U_com)
-    AtA_inverse = multiply_matrix(U_com_inverse, L_com_inverse)
+
+    # Calculate inverse of AtA
+    info_log('Calculate inverse of AtA')
+    AtA_inverse = compute_inverse(AtA)
+    if not AtA_inverse:
+        return None, None
+
+    # Calculate (AtA)^-1 times At
+    info_log('Calculate inverse of AtA times At')
     AtA_inverse_At = multiply_matrix(AtA_inverse, At)
+    if not AtA:
+        # Shouldn't reach here
+        error_log('Dimension does not match between AtA_inverse and At')
+        return None, None
+
+    # Calculate (AtA)^-1 * At * b
+    info_log('Calculate result')
     result = multiply_matrix(AtA_inverse_At, b_loc)
-    return result
+    if not AtA:
+        # Shouldn't reach here
+        error_log('Dimension does not match between AtA_inverse_At and b_loc')
+        return None, None
+
+    # Calculate total error
+    info_log('Calculate error')
+    error = compute_error(A_loc, result, b_loc)
+
+    return result, error
 
 
 def transpose_matrix(mat: List[List[float]]) -> List[List[float]]:
@@ -53,6 +85,24 @@ def multiply_matrix(u: List[List[float]], v: List[List[float]]) -> List[List[flo
         result = result[0]
 
     return result
+
+
+def compute_inverse(mat: List[List[float]]) -> List[List[float]] or None:
+    """
+    Compute the inverse matrix
+    :param mat: matrix to be inverted
+    :return: inverse matrix
+    """
+    L_com, U_com = compute_LU(mat)
+    L_com_inverse, U_com_inverse = compute_L_inverse(L_com), compute_U_inverse(U_com)
+    if not L_com_inverse or not U_com_inverse:
+        error_log('L or/and U is/are not invertible ')
+        return None
+    inverse = multiply_matrix(U_com_inverse, L_com_inverse)
+    if not inverse:
+        # Shouldn't reach here
+        error_log('Dimension does not match between U_com_inverse and L_com_inverse')
+    return inverse
 
 
 def compute_LU(mat: List[List[float]]) -> Tuple[List[List[float]], List[List[float]]]:
@@ -142,7 +192,7 @@ def compute_U_inverse(U: List[List[float]]) -> List[List[float]] or None:
     return U_inverse
 
 
-def compute_error(A_loc: List[List[float]], x_loc: List[List[float]], b_loc: List[List[float]]):
+def compute_error(A_loc: List[List[float]], x_loc: List[List[float]], b_loc: List[List[float]]) -> List[float]:
     """
     Compute total error
     :param A_loc: matrix A_loc containing x value of all points
@@ -156,6 +206,27 @@ def compute_error(A_loc: List[List[float]], x_loc: List[List[float]], b_loc: Lis
     return error
 
 
+def info_log(log: str) -> None:
+    """
+    Print info log
+    :param log: log to be shown
+    :return: None
+    """
+    if verbosity > 0:
+        print(f'[\033[96mINFO\033[00m] {log}')
+        sys.stdout.flush()
+
+
+def error_log(log: str) -> None:
+    """
+    Print error log
+    :param log: log to be shown
+    :return: None
+    """
+    print(f'[\033[91mERROR\033[00m] {log}')
+    sys.stdout.flush()
+
+
 def parse_arguments():
     """
     Setup an ArgumentParser and get arguments from command-line
@@ -165,6 +236,7 @@ def parse_arguments():
     parser.add_argument('filename', help='File of data points', type=argparse.FileType('r'))
     parser.add_argument('n', help='Number of polynomial bases', type=int, default=2)
     parser.add_argument('lam', help='lambda λ', type=float, default=0)
+    parser.add_argument('-v', '--verbosity', help='verbosity level (0-1)', default=0, type=int)
 
     return parser.parse_args()
 
@@ -180,6 +252,7 @@ if __name__ == '__main__':
     file = args.filename
     n = args.n
     lam = args.lam
+    verbosity = args.verbosity
 
     # Get points from the file
     reader = csv.reader(file)
@@ -191,7 +264,8 @@ if __name__ == '__main__':
     b = [[p[1]] for p in points]
     pp = pprint.PrettyPrinter()
 
-    LSE_result = compute_x(A, b)
+    LSE_result, LSE_error = compute_LSE(A, b)
+    if not LSE_result and not LSE_error:
+        error_log('Cannot compute LSE. Please see the errors above.')
     pp.pprint(LSE_result)
-    LSE_error = compute_error(A, LSE_result, b)
     pp.pprint(LSE_error)

@@ -373,7 +373,7 @@ def plot(p: List[List[float]], LSE: List[List[float]], Newton: List[List[float]]
 if __name__ == '__main__':
     """
     Main function
-    Command: python3 ./regression.py <filename> <n> <lambda>
+    Command: python3 ./regression.py <filename> <n> <lambda> [-v (0-1)]
     """
 
     # Get arguments

@@ -13,13 +13,14 @@ def compute_LSE(A_loc: List[List[float]], b_loc: List[List[float]]) -> Tuple[Lis
     Compute vector x from matrix A, vector b and lambda
     :param A_loc: matrix A
     :param b_loc: vector b
-    :return: vector x
+    :return: vector x and total error
     """
+    info_log('=== LSE ===')
     # Calculate transpose A times A
     info_log('Calculate At')
     At = transpose_matrix(A_loc)
     info_log('Calculate AtA')
-    AtA = multiply_matrix(At, A_loc)
+    AtA = multiply_matrix(At, A_loc, 1.0)
     if not AtA:
         # Shouldn't reach here
         error_log('Dimension does not match between At and A')
@@ -37,7 +38,7 @@ def compute_LSE(A_loc: List[List[float]], b_loc: List[List[float]]) -> Tuple[Lis
 
     # Calculate (AtA)^-1 times At
     info_log('Calculate inverse of AtA times At')
-    AtA_inverse_At = multiply_matrix(AtA_inverse, At)
+    AtA_inverse_At = multiply_matrix(AtA_inverse, At, 1.0)
     if not AtA:
         # Shouldn't reach here
         error_log('Dimension does not match between AtA_inverse and At')
@@ -45,11 +46,59 @@ def compute_LSE(A_loc: List[List[float]], b_loc: List[List[float]]) -> Tuple[Lis
 
     # Calculate (AtA)^-1 * At * b
     info_log('Calculate result')
-    result = multiply_matrix(AtA_inverse_At, b_loc)
+    result = multiply_matrix(AtA_inverse_At, b_loc, 1.0)
     if not AtA:
         # Shouldn't reach here
         error_log('Dimension does not match between AtA_inverse_At and b_loc')
         return None, None
+
+    # Calculate total error
+    info_log('Calculate error')
+    error = compute_error(A_loc, result, b_loc)
+
+    return result, error
+
+
+def compute_Newton(A_loc: List[List[float]], b_loc: List[List[float]]) -> Tuple[List[List[float]], List[float]] or \
+                                                                          Tuple[None, None]:
+    """
+    Compute Newton' method
+    :param A_loc: matrix A
+    :param b_loc: vector b
+    :return: vector x and total error
+    """
+    info_log("=== Newton's method ===")
+    # Calculate gradient
+    info_log('Calculate gradient')
+    At = transpose_matrix(A_loc)
+    AtA = multiply_matrix(At, A, 1.0)
+    x = (np.random.rand(n, 1) * 2 - [[0.5] for _ in range(n)]).tolist()
+    gradient = add_or_sub_matrix(multiply_matrix(AtA, x, 2.0), multiply_matrix(At, b_loc, 2.0), 'sub')
+    if not gradient:
+        # Shouldn't reach here
+        error_log('Calculation of gradient failed')
+        return None, None
+
+    # Calculate Hessian
+    info_log('Calculate Hessian')
+    hessian = multiply_matrix(At, A, 2.0)
+    if not hessian:
+        # Shouldn't reach here
+        error_log('Calculation of Hessian failed')
+        return None, None
+
+    # Calculate inverse of Hessian
+    info_log('Calculate inverse of Hessian')
+    hessian_inverse = compute_inverse(hessian)
+    if not hessian_inverse:
+        # Shouldn't reach here
+        error_log('Calculation of inverted Hessian failed')
+        return None, None
+
+    # Calculate distance
+    info_log('Calculate distance')
+    distance = multiply_matrix(hessian_inverse, gradient, 1.0)
+    result = add_or_sub_matrix(x, distance, 'sub')
 
     # Calculate total error
     info_log('Calculate error')
@@ -67,11 +116,39 @@ def transpose_matrix(mat: List[List[float]]) -> List[List[float]]:
     return list(map(list, zip(*mat)))
 
 
-def multiply_matrix(u: List[List[float]], v: List[List[float]]) -> List[List[float]] or List[float] or None:
+def add_or_sub_matrix(u: List[List[float]], v: List[List[float]], ty: str) -> List[List[float]] or None:
+    """
+    Add/Subtract two matrices
+    :param u: matrix u
+    :param v: matrix v
+    :param ty: 'add' or 'sub'
+    :return: result matrix
+    """
+    # Check matrices
+    if not u or not v:
+        error_log('u or v is None for addition or subtraction')
+        return None
+
+    # Check dimensions
+    if len(u) == len(v):
+        if len(u[0]) != len(v[0]):
+            error_log('Dimension does not match between u and v for addition or subtraction')
+            return None
+    else:
+        error_log('Dimension does not match between u and v for addition or subtraction')
+        return None
+
+    return [[u[row][col] + v[row][col] if ty == 'add' else u[row][col] - v[row][col] for col in range(len(u[0]))] for
+            row in range(len(u))]
+
+
+def multiply_matrix(u: List[List[float]], v: List[List[float]], scalar: float) -> List[List[float]] or List[
+    float] or None:
     """
     Multiply two matrices
     :param u: matrix u
     :param v: matrix v
+    :param scalar: scalar to be timed to the result
     :return: result matrix or vector(number of rows is 1)
     """
     # Check dimension
@@ -82,7 +159,8 @@ def multiply_matrix(u: List[List[float]], v: List[List[float]]) -> List[List[flo
     u_row = len(u)
     v_col = len(v[0])
     vec_multi = len(v)
-    result = [[sum(u[row][i] * v[i][col] for i in range(vec_multi)) for col in range(v_col)] for row in range(u_row)]
+    result = [[scalar * sum(u[row][i] * v[i][col] for i in range(vec_multi)) for col in range(v_col)] for row in
+              range(u_row)]
     if len(result) == 1:
         result = result[0]
 
@@ -100,7 +178,7 @@ def compute_inverse(mat: List[List[float]]) -> List[List[float]] or None:
     if not L_com_inverse or not U_com_inverse:
         error_log('L or/and U is/are not invertible ')
         return None
-    inverse = multiply_matrix(U_com_inverse, L_com_inverse)
+    inverse = multiply_matrix(U_com_inverse, L_com_inverse, 1.0)
     if not inverse:
         # Shouldn't reach here
         error_log('Dimension does not match between U_com_inverse and L_com_inverse')
@@ -202,9 +280,9 @@ def compute_error(A_loc: List[List[float]], x_loc: List[List[float]], b_loc: Lis
     :param b_loc: vector b_loc containing y value of all points
     :return: total error
     """
-    Ax = multiply_matrix(A_loc, x_loc)
+    Ax = multiply_matrix(A_loc, x_loc, 1.0)
     error_vec = [[Ax[i][0] - b_loc[i][0]] for i in range(len(Ax))]
-    error = multiply_matrix(transpose_matrix(error_vec), error_vec)
+    error = multiply_matrix(transpose_matrix(error_vec), error_vec, 1.0)
     return error
 
 
@@ -306,7 +384,15 @@ if __name__ == '__main__':
     LSE_result, LSE_error = compute_LSE(A, b)
     if not LSE_result and not LSE_error:
         error_log('Cannot compute LSE. Please see the errors above.')
-    show_result(LSE_result, LSE_error, 'LSE')
+    else:
+        show_result(LSE_result, LSE_error, 'LSE')
+
+    # Compute Newton's method
+    Newton_result, Newton_error = compute_Newton(A, b)
+    if not Newton_result and not Newton_error:
+        error_log("Cannot compute Newton's method. Please see the errors above.")
+    else:
+        show_result(Newton_result, Newton_error, "Newton's Method")
 
     # Plot
     plot(points, LSE_result)

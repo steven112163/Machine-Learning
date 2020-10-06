@@ -3,6 +3,8 @@ import sys
 import csv
 import pprint
 from typing import List, Tuple
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def compute_LSE(A_loc: List[List[float]], b_loc: List[List[float]]) -> Tuple[List[List[float]], List[float]] or Tuple[
@@ -241,6 +243,42 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def show_result(result: List[List[float]], error: List[float], ty: str) -> None:
+    print(f'\n{ty}:')
+    line = 'Fitting line: '
+    for degree in range(n - 1, -1, -1):
+        if degree != n - 1:
+            if result[n - 1 - degree][0] > 0.0:
+                line += ' +'
+            else:
+                line += ' '
+        if degree != 0:
+            line += f'{result[n - 1 - degree][0]: .11f}X^{degree}'
+        else:
+            line += f'{result[n - 1 - degree][0]: .11f}'
+    print(line)
+    print(f'Total error: {error[0]: .11f}')
+
+
+def plot(p: List[List[float]], LSE: List[List[float]]) -> None:
+    """
+    Plot the result
+    :param p: matrix containing points
+    :param LSE: LSE result
+    :return: None
+    """
+    transposed = transpose_matrix(p)
+    x = np.arange(start=min(transposed[0]) - 1.0, stop=max(transposed[0]) + 1.0, step=0.01)
+    LSE_y = 0
+    for degree in range(n - 1, -1, -1):
+        LSE_y += LSE[n - 1 - degree][0] * (x ** degree)
+    plt.figure(1)
+    plt.subplot(211)
+    plt.scatter(transposed[0], transposed[1], c='r', edgecolors='k')
+    plt.plot(x, LSE_y, c='k')
+    plt.show()
+
+
 if __name__ == '__main__':
     """
     Main function
@@ -264,8 +302,11 @@ if __name__ == '__main__':
     b = [[p[1]] for p in points]
     pp = pprint.PrettyPrinter()
 
+    # Compute LSE
     LSE_result, LSE_error = compute_LSE(A, b)
     if not LSE_result and not LSE_error:
         error_log('Cannot compute LSE. Please see the errors above.')
-    pp.pprint(LSE_result)
-    pp.pprint(LSE_error)
+    show_result(LSE_result, LSE_error, 'LSE')
+
+    # Plot
+    plot(points, LSE_result)

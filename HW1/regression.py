@@ -267,7 +267,7 @@ def compute_U_inverse(U: List[List[float]]) -> List[List[float]] or None:
     # Invert remaining elements
     for row in range(dim - 2, -1, -1):
         for col in range(dim - 1, row, -1):
-            U_inverse[row][col] = -sum(U[row][i] * U_inverse[i][col] for i in range(col, row - 1, -1)) / U[row][row]
+            U_inverse[row][col] = -sum(U[row][i] * U_inverse[i][col] for i in range(col, row, -1)) / U[row][row]
 
     return U_inverse
 

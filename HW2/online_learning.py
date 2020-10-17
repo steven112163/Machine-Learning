@@ -30,7 +30,7 @@ def check_int_range(value: str) -> int:
     :return: integer value
     """
     int_value = int(value)
-    if int_value != 0 or int_value != 1:
+    if int_value != 0 and int_value != 1:
         raise argparse.ArgumentTypeError(f'{value} is an invalid value. It should be 0 or 1')
     return int_value
 

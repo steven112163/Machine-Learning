@@ -5,17 +5,55 @@ import numpy as np
 from typing import List, Dict, Union
 
 
-def discrete_classifier(train_image, train_label, test_image, test_label):
+def discrete_classifier(train_image: Dict[str, Union[int, np.ndarray]], train_label: Dict[str, Union[int, np.ndarray]],
+                        test_image: Dict[str, Union[int, np.ndarray]], test_label: Dict[str, Union[int, np.ndarray]]) -> \
+        List[np.ndarray] and float:
+    """
+    Discrete naive bayes classifier
+    :param train_image: Dictionary of image training data set
+    :param train_label: Dictionary of label training data set
+    :param test_image: Dictionary of image testing data set
+    :param test_label: Dictionary of label testing data set
+    :return: posterior of each image and error rate
+    """
     # Get prior
     prior = compute_prior(train_label)
 
     # Get likelihood
     likelihood = compute_likelihood(train_image, train_label)
 
+    # Calculate posterior
+    info_log('Calculate posterior')
+    num_wrong = 0
+    posteriors = []
+    for i in range(test_image['num']):
+        # posterior is negative because of log
+        posterior = np.log(prior)
+        for lab in range(10):
+            for p in range(test_image['pixels']):
+                posterior[lab] += np.log(likelihood[lab, p, test_image['images'][i, p] // 8])
 
-def compute_prior(label):
+        # Marginalization makes posterior positive
+        posterior /= np.sum(posterior)
+        posteriors.append(posterior)
+
+        # MAP, find minimum because posterior is positive
+        predict = np.argmin(posterior)
+        if predict != test_label['labels'][i]:
+            num_wrong += 1
+
+    return posteriors, float(num_wrong) / test_image['num']
+
+
+def compute_prior(label: Dict[str, Union[int, np.ndarray]]) -> np.ndarray:
+    """
+    Calculate prior
+    :param label: Dictionary of label training data set
+    :return: prior
+    """
     info_log('Calculate prior')
 
+    # Count the occurrence of each label
     prior = np.zeros(10, dtype=float)
     for i in range(label['num']):
         prior[label['labels'][i]] += 1
@@ -23,24 +61,32 @@ def compute_prior(label):
     return prior / label['num']
 
 
-def compute_likelihood(image, label):
+def compute_likelihood(image: Dict[str, Union[int, np.ndarray]],
+                       label: Dict[str, Union[int, np.ndarray]]) -> np.ndarray:
+    """
+    Calculate likelihood
+    :param image: Dictionary of image training data set
+    :param label: Dictionary of label training data set
+    :return: likelihood
+    """
     info_log('Calculate likelihood')
 
-    # Count occurrence of each interval of every pixels in each label
+    # Count the occurrence of each interval of every pixels in each label
     likelihood = np.zeros((10, image['pixels'], 32), dtype=float)
     for i in range(image['num']):
         for p in range(image['pixels']):
             likelihood[label['labels'][i], p, image['images'][i][p] // 8] += 1
 
     # Get frequency
-    total_in_pixels = likelihood.sum(axis=2)
+    total_in_pixels = np.sum(likelihood, axis=2)
     for lab in range(10):
         for p in range(image['pixels']):
             likelihood[lab, p, :] /= total_in_pixels[lab, p]
 
     # Pseudo count
     likelihood[likelihood == 0] = 0.00001
-    pp.pprint(likelihood[0, 0])
+
+    return likelihood
 
 
 def info_log(log: str) -> None:
@@ -148,7 +194,8 @@ if __name__ == '__main__':
     if not mode:
         # Discrete mode
         info_log('=== Discrete Mode ===')
-        discrete_classifier({'num': num_tr_images, 'pixels': num_tr_pixels, 'images': training_images},
-                            {'num': num_tr_labels, 'labels': training_labels},
-                            {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
-                            {'num': num_te_labels, 'labels': testing_labels}, )
+        posteriors, error = discrete_classifier(
+            {'num': num_tr_images, 'pixels': num_tr_pixels, 'images': training_images},
+            {'num': num_tr_labels, 'labels': training_labels},
+            {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
+            {'num': num_te_labels, 'labels': testing_labels}, )

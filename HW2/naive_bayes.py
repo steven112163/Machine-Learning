@@ -1,6 +1,46 @@
 import argparse
 import sys
 import pprint
+import numpy as np
+from typing import List, Dict, Union
+
+
+def discrete_classifier(train_image, train_label, test_image, test_label):
+    # Get prior
+    prior = compute_prior(train_label)
+
+    # Get likelihood
+    likelihood = compute_likelihood(train_image, train_label)
+
+
+def compute_prior(label):
+    info_log('Calculate prior')
+
+    prior = np.zeros(10, dtype=float)
+    for i in range(label['num']):
+        prior[label['labels'][i]] += 1
+
+    return prior / label['num']
+
+
+def compute_likelihood(image, label):
+    info_log('Calculate likelihood')
+
+    # Count occurrence of each interval of every pixels in each label
+    likelihood = np.zeros((10, image['pixels'], 32), dtype=float)
+    for i in range(image['num']):
+        for p in range(image['pixels']):
+            likelihood[label['labels'][i], p, image['images'][i][p] // 8] += 1
+
+    # Get frequency
+    total_in_pixels = likelihood.sum(axis=2)
+    for lab in range(10):
+        for p in range(image['pixels']):
+            likelihood[lab, p, :] /= total_in_pixels[lab, p]
+
+    # Pseudo count
+    likelihood[likelihood == 0] = 0.00001
+    pp.pprint(likelihood[0, 0])
 
 
 def info_log(log: str) -> None:
@@ -79,44 +119,36 @@ if __name__ == '__main__':
 
     # Get image training set
     info_log('=== Get image training set ===')
-    tr_image.read(4)
-    num_tr_images = int.from_bytes(tr_image.read(4), 'big')
-    num_tr_image_rows = int.from_bytes(tr_image.read(4), 'big')
-    num_tr_image_cols = int.from_bytes(tr_image.read(4), 'big')
-    training_images = []
-    for _ in range(num_tr_images):
-        image = []
-        for _ in range(num_tr_image_rows):
-            row = [int.from_bytes(tr_image.read(1), 'big') for _ in range(num_tr_image_cols)]
-            image.append(row)
-        training_images.append(image)
+    _, num_tr_images, rows, cols = np.fromfile(file=tr_image, dtype=np.dtype('>i4'), count=4)
+    training_images = np.fromfile(file=tr_image, dtype=np.dtype('>B'))
+    num_tr_pixels = rows * cols
+    training_images = np.reshape(training_images, (num_tr_images, num_tr_pixels))
     tr_image.close()
 
     # Get label training set
     info_log('=== Get label training set ===')
-    tr_label.read(4)
-    num_tr_labels = int.from_bytes(tr_label.read(4), 'big')
-    training_labels = [int.from_bytes(tr_label.read(1), 'big') for _ in range(num_tr_labels)]
+    _, num_tr_labels = np.fromfile(file=tr_label, dtype=np.dtype('>i4'), count=2)
+    training_labels = np.fromfile(file=tr_label, dtype=np.dtype('>B'))
     tr_label.close()
 
     # Get image testing set
     info_log('=== Get image testing set ===')
-    te_image.read(4)
-    num_te_images = int.from_bytes(te_image.read(4), 'big')
-    num_te_image_rows = int.from_bytes(te_image.read(4), 'big')
-    num_te_image_cols = int.from_bytes(te_image.read(4), 'big')
-    testing_images = []
-    for _ in range(num_te_images):
-        image = []
-        for _ in range(num_te_image_rows):
-            row = [int.from_bytes(te_image.read(1), 'big') for _ in range(num_te_image_cols)]
-            image.append(row)
-        testing_images.append(image)
+    _, num_te_images, rows, cols = np.fromfile(file=te_image, dtype=np.dtype('>i4'), count=4)
+    testing_images = np.fromfile(file=te_image, dtype=np.dtype('>B'))
+    num_te_pixels = rows * cols
+    testing_images = np.reshape(testing_images, (num_te_images, num_te_pixels))
     te_image.close()
 
     # Get label testing set
     info_log('=== Get label testing set ===')
-    te_label.read(4)
-    num_te_labels = int.from_bytes(te_label.read(4), 'big')
-    testing_labels = [int.from_bytes(te_label.read(1), 'big') for _ in range(num_te_labels)]
+    _, num_te_labels = np.fromfile(file=te_label, dtype=np.dtype('>i4'), count=2)
+    testing_labels = np.fromfile(file=te_label, dtype=np.dtype('>B'))
     te_label.close()
+
+    if not mode:
+        # Discrete mode
+        info_log('=== Discrete Mode ===')
+        discrete_classifier({'num': num_tr_images, 'pixels': num_tr_pixels, 'images': training_images},
+                            {'num': num_tr_labels, 'labels': training_labels},
+                            {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
+                            {'num': num_te_labels, 'labels': testing_labels}, )

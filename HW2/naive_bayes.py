@@ -7,14 +7,14 @@ from typing import List, Dict, Union
 
 def discrete_classifier(train_image: Dict[str, Union[int, np.ndarray]], train_label: Dict[str, Union[int, np.ndarray]],
                         test_image: Dict[str, Union[int, np.ndarray]], test_label: Dict[str, Union[int, np.ndarray]]) -> \
-        List[np.ndarray] and float:
+        List[np.ndarray] and np.ndarray and float:
     """
     Discrete naive bayes classifier
     :param train_image: Dictionary of image training data set
     :param train_label: Dictionary of label training data set
     :param test_image: Dictionary of image testing data set
     :param test_label: Dictionary of label testing data set
-    :return: posterior of each image and error rate
+    :return: posterior of each image, likelihood and error rate
     """
     # Get prior
     prior = compute_prior(train_label)
@@ -42,7 +42,7 @@ def discrete_classifier(train_image: Dict[str, Union[int, np.ndarray]], train_la
         if predict != test_label['labels'][i]:
             num_wrong += 1
 
-    return posteriors, float(num_wrong) / test_image['num']
+    return posteriors, likelihood, float(num_wrong) / test_image['num']
 
 
 def compute_prior(label: Dict[str, Union[int, np.ndarray]]) -> np.ndarray:
@@ -87,6 +87,43 @@ def compute_likelihood(image: Dict[str, Union[int, np.ndarray]],
     likelihood[likelihood == 0] = 0.00001
 
     return likelihood
+
+
+def show_results(posteriors: List[np.ndarray], labels: np.ndarray, likelihood: np.ndarray, row: int, col: int,
+                 error_rate: float) -> None:
+    """
+    Show results
+    :param posteriors: List of posteriors of each image
+    :param labels: Label testing data set
+    :param likelihood: Likelihood of each label
+    :param row: number of rows in an image
+    :param col: number of cols in an image
+    :param error_rate: Error rate
+    :return: None
+    """
+    info_log('Print results')
+    # Print all posteriors
+    for i in range(len(posteriors)):
+        print('Posterior (in log scale):')
+        for lab in range(10):
+            print(f'{lab}: {posteriors[i][lab]}')
+        print(f'Prediction: {np.argmin(posteriors[i])}, Ans: {labels[i]}\n')
+
+    # Print imaginations
+    print('Imagination of numbers in Bayesian classifier:\n')
+    ones = np.sum(likelihood[:, :, 16:32], axis=2)
+    zeros = np.sum(likelihood[:, :, 0:16], axis=2)
+    imaginations = (ones >= zeros)
+    for lab in range(10):
+        print(f'{lab}:')
+        for r in range(row):
+            for c in range(col):
+                print(f'\033[93m1\033[00m', end=' ') if imaginations[lab, r * col + c] else print('0', end=' ')
+            print('')
+        print('')
+
+    # Print error rate
+    print(f'Error rate: {error_rate}')
 
 
 def info_log(log: str) -> None:
@@ -194,8 +231,9 @@ if __name__ == '__main__':
     if not mode:
         # Discrete mode
         info_log('=== Discrete Mode ===')
-        posteriors, error = discrete_classifier(
+        probabilities, likelihoods, error = discrete_classifier(
             {'num': num_tr_images, 'pixels': num_tr_pixels, 'images': training_images},
             {'num': num_tr_labels, 'labels': training_labels},
             {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
             {'num': num_te_labels, 'labels': testing_labels}, )
+        show_results(probabilities, testing_labels, likelihoods, rows, cols, error)

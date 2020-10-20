@@ -2,7 +2,7 @@ import argparse
 import sys
 import pprint
 import numpy as np
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Tuple
 
 
 def discrete_classifier(train_image: Dict[str, Union[int, np.ndarray]], train_label: Dict[str, Union[int, np.ndarray]],
@@ -87,6 +87,54 @@ def compute_likelihood(image: Dict[str, Union[int, np.ndarray]],
     likelihood[likelihood == 0] = 0.00001
 
     return likelihood
+
+
+def continuous_classifier(train_image: Dict[str, Union[int, np.ndarray]],
+                          train_label: Dict[str, Union[int, np.ndarray]], test_image: Dict[str, Union[int, np.ndarray]],
+                          test_label: Dict[str, Union[int, np.ndarray]]):
+    """
+    Continuous naive bayes classifier
+    :param train_image: Dictionary of image training data set
+    :param train_label: Dictionary of label training data set
+    :param test_image: Dictionary of image testing data set
+    :param test_label: Dictionary of label testing data set
+    :return: TODO
+    """
+    # Get prior
+    prior = compute_prior(train_label)
+
+    # Get MLE mean and variance of Gaussian
+    mean, variance = compute_mle_gaussian(train_image, train_label, prior)
+
+
+def compute_mle_gaussian(train_image: Dict[str, Union[int, np.ndarray]],
+                         train_label: Dict[str, Union[int, np.ndarray]],
+                         proportion: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Calculate MLE mean and variance of Gaussian
+    :param train_image: Dictionary of image training data set
+    :param train_label: Dictionary of label training data set
+    :param proportion: Array of each label's proportion in label training data set
+    :return: mean and variance
+    """
+    info_log('Calculate mean and variance of Gaussian')
+
+    # Get mean
+    mean = np.zeros((10, train_image['pixels']), dtype=float)
+    for i in range(train_image['num']):
+        mean[train_label['labels'][i], :] += train_image['images'][i, :]
+    label_num = proportion * train_image['num']
+    for lab in range(10):
+        mean[lab, :] /= label_num[lab]
+
+    # Get variance
+    variance = np.zeros((10, train_image['pixels']), dtype=float)
+    for i in range(train_image['num']):
+        variance[train_label['labels'][i], :] += np.square(train_image['images'][i, :] - mean[train_label['labels'][i], :])
+    for lab in range(10):
+        variance[lab, :] /= label_num[lab]
+
+    return mean, variance
 
 
 def show_results(posteriors: List[np.ndarray], labels: np.ndarray, likelihood: np.ndarray, row: int, col: int,
@@ -235,5 +283,13 @@ if __name__ == '__main__':
             {'num': num_tr_images, 'pixels': num_tr_pixels, 'images': training_images},
             {'num': num_tr_labels, 'labels': training_labels},
             {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
-            {'num': num_te_labels, 'labels': testing_labels}, )
+            {'num': num_te_labels, 'labels': testing_labels})
         show_results(probabilities, testing_labels, likelihoods, rows, cols, error)
+    else:
+        # Continuous mode
+        info_log('=== Continuous Mode ===')
+        continuous_classifier(
+            {'num': num_tr_images, 'pixels': num_tr_pixels, 'images': training_images},
+            {'num': num_tr_labels, 'labels': training_labels},
+            {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
+            {'num': num_te_labels, 'labels': testing_labels})

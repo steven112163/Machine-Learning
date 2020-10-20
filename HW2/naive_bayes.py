@@ -199,7 +199,10 @@ def show_results(posteriors: List[np.ndarray], labels: np.ndarray, likelihood_me
         print(f'{lab}:')
         for r in range(row):
             for c in range(col):
-                print(f'\033[93m1\033[00m', end=' ') if imaginations[lab, r * col + c] else print('0', end=' ')
+                if m:
+                    print(f'\033[91m1\033[00m', end=' ') if imaginations[lab, r * col + c] else print('0', end=' ')
+                else:
+                    print(f'\033[93m1\033[00m', end=' ') if imaginations[lab, r * col + c] else print('0', end=' ')
             print('')
         print('')
 

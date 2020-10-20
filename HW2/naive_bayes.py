@@ -7,7 +7,7 @@ from typing import List, Dict, Union, Tuple
 
 def discrete_classifier(train_image: Dict[str, Union[int, np.ndarray]], train_label: Dict[str, Union[int, np.ndarray]],
                         test_image: Dict[str, Union[int, np.ndarray]], test_label: Dict[str, Union[int, np.ndarray]]) -> \
-        List[np.ndarray] and np.ndarray and float:
+        Tuple[List[np.ndarray], np.ndarray, float]:
     """
     Discrete naive bayes classifier
     :param train_image: Dictionary of image training data set
@@ -27,7 +27,7 @@ def discrete_classifier(train_image: Dict[str, Union[int, np.ndarray]], train_la
     num_wrong = 0
     posteriors = []
     for i in range(test_image['num']):
-        # posterior is negative because of log
+        # Posterior is negative because of log
         posterior = np.log(prior)
         for lab in range(10):
             for p in range(test_image['pixels']):
@@ -91,20 +91,46 @@ def compute_likelihood(image: Dict[str, Union[int, np.ndarray]],
 
 def continuous_classifier(train_image: Dict[str, Union[int, np.ndarray]],
                           train_label: Dict[str, Union[int, np.ndarray]], test_image: Dict[str, Union[int, np.ndarray]],
-                          test_label: Dict[str, Union[int, np.ndarray]]):
+                          test_label: Dict[str, Union[int, np.ndarray]]) -> Tuple[List[np.ndarray], np.ndarray, float]:
     """
     Continuous naive bayes classifier
     :param train_image: Dictionary of image training data set
     :param train_label: Dictionary of label training data set
     :param test_image: Dictionary of image testing data set
     :param test_label: Dictionary of label testing data set
-    :return: TODO
+    :return: posterior of each image, mean and error rate
     """
     # Get prior
     prior = compute_prior(train_label)
 
     # Get MLE mean and variance of Gaussian
     mean, variance = compute_mle_gaussian(train_image, train_label, prior)
+
+    # Calculate posterior
+    info_log('Calculate posterior')
+    num_wrong = 0
+    posteriors = []
+    for i in range(test_image['num']):
+        # Posterior is negative because of log
+        posterior = np.log(prior)
+        for lab in range(10):
+            for p in range(test_image['pixels']):
+                if variance[lab, p] == 0:
+                    # Avoid division of 0 denominator
+                    continue
+                posterior[lab] -= np.log(np.sqrt(2.0 * np.pi * variance[lab, p]))
+                posterior[lab] -= np.square((test_image['images'][i, p] - mean[lab, p])) / 2.0 / variance[lab, p]
+
+        # Marginalization makes posterior positive
+        posterior /= np.sum(posterior)
+        posteriors.append(posterior)
+
+        # MAP, find minimum because posterior is positive
+        predict = np.argmin(posterior)
+        if predict != test_label['labels'][i]:
+            num_wrong += 1
+
+    return posteriors, mean, float(num_wrong) / test_image['num']
 
 
 def compute_mle_gaussian(train_image: Dict[str, Union[int, np.ndarray]],
@@ -130,23 +156,25 @@ def compute_mle_gaussian(train_image: Dict[str, Union[int, np.ndarray]],
     # Get variance
     variance = np.zeros((10, train_image['pixels']), dtype=float)
     for i in range(train_image['num']):
-        variance[train_label['labels'][i], :] += np.square(train_image['images'][i, :] - mean[train_label['labels'][i], :])
+        variance[train_label['labels'][i], :] += np.square(
+            train_image['images'][i, :] - mean[train_label['labels'][i], :])
     for lab in range(10):
         variance[lab, :] /= label_num[lab]
 
     return mean, variance
 
 
-def show_results(posteriors: List[np.ndarray], labels: np.ndarray, likelihood: np.ndarray, row: int, col: int,
-                 error_rate: float) -> None:
+def show_results(posteriors: List[np.ndarray], labels: np.ndarray, likelihood_mean: np.ndarray, row: int, col: int,
+                 error_rate: float, m: int) -> None:
     """
     Show results
     :param posteriors: List of posteriors of each image
     :param labels: Label testing data set
-    :param likelihood: Likelihood of each label
+    :param likelihood_mean: Likelihood of each label or mean of each label
     :param row: number of rows in an image
     :param col: number of cols in an image
     :param error_rate: Error rate
+    :param m: 0 for discrete mode, 1 for continuous mode
     :return: None
     """
     info_log('Print results')
@@ -159,9 +187,14 @@ def show_results(posteriors: List[np.ndarray], labels: np.ndarray, likelihood: n
 
     # Print imaginations
     print('Imagination of numbers in Bayesian classifier:\n')
-    ones = np.sum(likelihood[:, :, 16:32], axis=2)
-    zeros = np.sum(likelihood[:, :, 0:16], axis=2)
-    imaginations = (ones >= zeros)
+    if not m:
+        # Discrete mode
+        ones = np.sum(likelihood_mean[:, :, 16:32], axis=2)
+        zeros = np.sum(likelihood_mean[:, :, 0:16], axis=2)
+        imaginations = (ones >= zeros)
+    else:
+        # Continuous mode
+        imaginations = (likelihood_mean >= 128)
     for lab in range(10):
         print(f'{lab}:')
         for r in range(row):
@@ -284,12 +317,13 @@ if __name__ == '__main__':
             {'num': num_tr_labels, 'labels': training_labels},
             {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
             {'num': num_te_labels, 'labels': testing_labels})
-        show_results(probabilities, testing_labels, likelihoods, rows, cols, error)
+        show_results(probabilities, testing_labels, likelihoods, rows, cols, error, mode)
     else:
         # Continuous mode
         info_log('=== Continuous Mode ===')
-        continuous_classifier(
+        probabilities, means, error = continuous_classifier(
             {'num': num_tr_images, 'pixels': num_tr_pixels, 'images': training_images},
             {'num': num_tr_labels, 'labels': training_labels},
             {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
             {'num': num_te_labels, 'labels': testing_labels})
+        show_results(probabilities, testing_labels, means, rows, cols, error, mode)

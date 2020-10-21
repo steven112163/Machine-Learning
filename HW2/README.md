@@ -7,7 +7,8 @@
 
 ## Online Learning
 ```shell script
-./$ python3 online_learning.py <filename> <a> <b> [-v (0-1)]
+./$ python3 online_learning.py [-f filename] <a> <b> [-v (0-1)]
 ```
 
 ## Prerequisites
+* numpy >= 1.9.2

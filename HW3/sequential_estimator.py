@@ -1,5 +1,17 @@
 import argparse
 import sys
+import numpy as np
+
+
+def univariate_gaussian_data_generator(mean: float, variance: float) -> float:
+    """
+    Generate data point ~ N(mean, variance) from uniform distribution
+    Based on central limit theorem and Irwin-Hall
+    :param mean: mean of gaussian distribution
+    :param variance: variance of gaussian distribution
+    :return: float data point from N(mean, variance)
+    """
+    return (np.sum(np.random.uniform(0, 1, 12)) - 6) * np.sqrt(variance) + mean
 
 
 def info_log(log: str) -> None:
@@ -60,3 +72,6 @@ if __name__ == '__main__':
     s = args.s
     mode = args.mode
     verbosity = args.verbosity
+
+    if not mode:
+        print(univariate_gaussian_data_generator(m, s))

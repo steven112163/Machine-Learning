@@ -1,6 +1,26 @@
 import argparse
 import sys
 from typing import List
+from sequential_estimator import univariate_gaussian_data_generator
+import numpy as np
+
+
+def polynomial_basis_linear_model_data_generator(basis: int, variance: float, omega: List) -> float:
+    """
+    Generate data point according to polynomial linear model omega^T * φ(x) + e, e ~ N(0, variance)
+    :param basis: basis number of φ
+    :param variance: variance of e
+    :param omega: a basis x 1 weight vector
+    :return: float data point from polynomial linear model
+    """
+    if basis != len(omega):
+        raise ValueError(f"Basis number: {basis} and number of omega: {len(omega)} don't match")
+
+    y = univariate_gaussian_data_generator(0, np.sqrt(variance))
+    for power, w in enumerate(omega):
+        y += w * np.power(np.random.uniform(-1, 1), power)
+
+    return y
 
 
 def info_log(log: str) -> None:
@@ -57,7 +77,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('n', help='basis number', default=1, type=int)
     parser.add_argument('a', help='variance', default=1.0, type=float)
-    parser.add_argument('omega', help='weight', nargs='+', type=check_float)
+    parser.add_argument('m', help='weight', nargs='+', type=check_float)
     parser.add_argument('b', help='precision', default=1.0, type=float)
     parser.add_argument('-m', '--mode',
                         help='0: Bayesian Linear regression, 1: polynomial basis linear model data generator',
@@ -75,12 +95,12 @@ if __name__ == '__main__':
     args = parse_arguments()
     n = args.n
     a = args.a
-    omega = args.omega
+    m = args.m
     mode = args.mode
     verbosity = args.verbosity
 
-    print(f'n: {n}')
-    print(f'a: {a}')
-    print(f'omega: {omega}')
-    print(f'mode: {mode}')
-    print(f'verbosity: {verbosity}')
+    print(n)
+    print(m)
+
+    if not mode:
+        print(polynomial_basis_linear_model_data_generator(n, a, m))

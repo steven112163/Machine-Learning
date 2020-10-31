@@ -14,6 +14,41 @@ def univariate_gaussian_data_generator(mean: float, variance: float) -> float:
     return (np.sum(np.random.uniform(0, 1, 12)) - 6) * np.sqrt(variance) + mean
 
 
+def sequential_estimator(mean: float, variance: float) -> None:
+    """
+    Sequential estimate the mean and variance using Welford's online algorithm
+    :param mean: mean of gaussian distribution
+    :param variance: variance of gaussian distribution
+    :return: None
+    """
+    print(f'Data point source function: N({mean}, {variance})\n')
+
+    count = 0
+    while True:
+        new_point = univariate_gaussian_data_generator(mean, variance)
+
+        if not count:
+            count += 1
+            population_variance = 0
+            sample_variance = 0
+            current_mean = new_point
+            M2 = 0
+        else:
+            count += 1
+            first_delta = new_point - current_mean
+            current_mean += first_delta / count
+            second_delta = new_point - current_mean
+            M2 += first_delta * second_delta
+            sample_variance = M2 / (count - 1)
+            population_variance = M2 / count
+
+        info_log(f'Total data points added so far: {count}')
+        print(f'Add data point: {new_point}')
+        print(f'Mean = {current_mean}\tVariance = {sample_variance}')
+        if abs(current_mean - mean) < 0.01 and abs(sample_variance - variance) < 0.01:
+            break
+
+
 def info_log(log: str) -> None:
     """
     Print information log
@@ -74,4 +109,8 @@ if __name__ == '__main__':
     verbosity = args.verbosity
 
     if not mode:
-        print(univariate_gaussian_data_generator(m, s))
+        info_log('=== Sequential estimator ===')
+        sequential_estimator(m, s)
+    else:
+        info_log('=== Univariate gaussian data generator ===')
+        print(f'Data point: {univariate_gaussian_data_generator(m, s)}')

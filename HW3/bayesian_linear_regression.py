@@ -1,11 +1,12 @@
 import argparse
 import sys
-from typing import List
+from typing import List, Tuple
 from sequential_estimator import univariate_gaussian_data_generator
+import pprint
 import numpy as np
 
 
-def polynomial_basis_linear_model_data_generator(basis: int, variance: float, omega: List) -> float:
+def polynomial_basis_linear_model_data_generator(basis: int, variance: float, omega: List) -> Tuple[float, float]:
     """
     Generate data point according to polynomial linear model omega^T * φ(x) + e, e ~ N(0, variance)
     :param basis: basis number of φ
@@ -14,13 +15,85 @@ def polynomial_basis_linear_model_data_generator(basis: int, variance: float, om
     :return: float data point from polynomial linear model
     """
     if basis != len(omega):
+        error_log(f"Basis number: {basis} and number of omega: {len(omega)} don't match")
         raise ValueError(f"Basis number: {basis} and number of omega: {len(omega)} don't match")
 
+    x = np.random.uniform(-1, 1)
     y = univariate_gaussian_data_generator(0, np.sqrt(variance))
     for power, w in enumerate(omega):
-        y += w * np.power(np.random.uniform(-1, 1), power)
+        y += w * np.power(x, power)
+    info_log(f'Get data point ({x}, {y})')
 
-    return y
+    return x, y
+
+
+def bayesian_linear_regression(basis: int, variance: float, omega: List, precision: float) -> None:
+    """
+    Bayesian linear regression
+    :param basis: basis number of polynomial basis linear model
+    :param variance: variance of polynomial basis linear model
+    :param omega: weight vector of polynomial basis linear model
+    :param precision: precision b for initial prior ~ N(0, b^-1 * I)
+    :return: None
+    """
+    if basis != len(omega):
+        error_log(f"Basis number: {basis} and number of omega: {len(omega)} don't match")
+        raise ValueError(f"Basis number: {basis} and number of omega: {len(omega)} don't match")
+
+    count = 0
+    points = []
+    prior_mean = 0
+    prior_covariance = 0
+    inv_variance = 1.0 / variance
+    pp = pprint.PrettyPrinter()
+    while True:
+        # Get a sample data point
+        x, y = polynomial_basis_linear_model_data_generator(basis, variance, omega)
+        points.append([x, y])
+        design = create_design_matrix(x, basis)
+
+        if not count:
+            count += 1
+            # First round
+            # P(θ, D) ~ N(a(aA^T * A + bI)^-1 * A^T * y, (aA^T * A + bI)^-1)
+            posterior_covariance = np.linalg.inv(inv_variance * design.T.dot(design) + precision * np.identity(basis))
+            posterior_mean = inv_variance * posterior_covariance.dot(design.T) * y
+        else:
+            count += 1
+            # N round
+            # P(θ, D) ~ N((aA^T * A + S)^-1 * (aA^T * y + S * m), (aA^T * A + S)^-1)
+            posterior_covariance = np.linalg.inv(inv_variance * design.T.dot(design) + np.linalg.inv(prior_covariance))
+            posterior_mean = posterior_covariance.dot(
+                inv_variance * design.T * y + np.linalg.inv(prior_covariance).dot(prior_mean))
+
+        print(f'=== {count} ===')
+        pp.pprint(posterior_mean)
+        pp.pprint(posterior_covariance)
+        marginalize_mean = design.dot(posterior_mean)
+        marginalize_variance = variance + design.dot(posterior_covariance).dot(design.T)
+        print(marginalize_mean, marginalize_variance)
+        print()
+
+        prior_mean = posterior_mean
+        prior_covariance = posterior_covariance
+
+        if count > 50:
+            break
+
+
+def create_design_matrix(x: float, basis: int) -> np.ndarray:
+    """
+    Create a design matrix from x and basis
+    :param x: x coordinate value from new data point
+    :param basis: basis number
+    :return: a 1 x basis design matrix
+    """
+    info_log(f'Get design matrix from {x}')
+    design = np.zeros((1, basis))
+    for i in range(basis):
+        design[0, i] = np.power(x, i)
+
+    return design
 
 
 def info_log(log: str) -> None:
@@ -96,11 +169,13 @@ if __name__ == '__main__':
     n = args.n
     a = args.a
     m = args.m
+    b = args.b
     mode = args.mode
     verbosity = args.verbosity
 
-    print(n)
-    print(m)
-
     if not mode:
-        print(polynomial_basis_linear_model_data_generator(n, a, m))
+        info_log('=== Bayesian linear regression ===')
+        bayesian_linear_regression(n, a, m, b)
+    else:
+        info_log('=== Polynomial basis linear model data generator ===')
+        print(f'Data point: {polynomial_basis_linear_model_data_generator(n, a, m)}')

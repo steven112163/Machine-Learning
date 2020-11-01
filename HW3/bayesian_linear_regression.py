@@ -2,7 +2,7 @@ import argparse
 import sys
 from typing import List, Tuple
 from sequential_estimator import univariate_gaussian_data_generator
-import pprint
+from copy import deepcopy
 import numpy as np
 
 
@@ -27,14 +27,16 @@ def polynomial_basis_linear_model_data_generator(basis: int, variance: float, om
     return x, y
 
 
-def bayesian_linear_regression(basis: int, variance: float, omega: List, precision: float) -> None:
+def bayesian_linear_regression(basis: int, variance: float, omega: List, precision: float) -> Tuple[
+    List[List[float]], float, np.ndarray, float, np.ndarray, float, np.ndarray]:
     """
     Bayesian linear regression
     :param basis: basis number of polynomial basis linear model
     :param variance: variance of polynomial basis linear model
     :param omega: weight vector of polynomial basis linear model
     :param precision: precision b for initial prior ~ N(0, b^-1 * I)
-    :return: None
+    :return: sample points, posterior mean, posterior covariance, tenth mean, tenth covariance, fiftieth mean and
+    fiftieth covariance
     """
     if basis != len(omega):
         error_log(f"Basis number: {basis} and number of omega: {len(omega)} don't match")
@@ -42,16 +44,23 @@ def bayesian_linear_regression(basis: int, variance: float, omega: List, precisi
 
     count = 0
     points = []
-    prior_mean = 0
-    prior_covariance = 0
     inv_variance = 1.0 / variance
-    pp = pprint.PrettyPrinter()
+    prior_mean = np.zeros((1, basis))
+    tenth_mean = 0
+    tenth_covariance = 0
+    fiftieth_mean = 0
+    fiftieth_covariance = 0
     while True:
         # Get a sample data point
         x, y = polynomial_basis_linear_model_data_generator(basis, variance, omega)
         points.append([x, y])
+        print(f'Add data point ({x}, {y}):\n')
+
+        # Create design matrix from new data point
         design = create_design_matrix(x, basis)
 
+        # Get posterior mean and covariance
+        # They are the mean and covariance of weight vector
         if not count:
             count += 1
             # First round
@@ -66,19 +75,46 @@ def bayesian_linear_regression(basis: int, variance: float, omega: List, precisi
             posterior_mean = posterior_covariance.dot(
                 inv_variance * design.T * y + np.linalg.inv(prior_covariance).dot(prior_mean))
 
-        print(f'=== {count} ===')
-        pp.pprint(posterior_mean)
-        pp.pprint(posterior_covariance)
+        # Get marginalized mean and variance
+        # They are the mean and variance of y
         marginalize_mean = design.dot(posterior_mean)
         marginalize_variance = variance + design.dot(posterior_covariance).dot(design.T)
-        print(marginalize_mean, marginalize_variance)
-        print()
 
+        # Print posteriors
+        info_log(f'=== {count} ===')
+        print('Posterior mean:')
+        for i in range(len(posterior_mean)):
+            print(f'{posterior_mean[i, 0]:15.10f}')
+
+        print('\nPosterior variance:')
+        for row in range(len(posterior_covariance)):
+            for col in range(len(posterior_covariance[row])):
+                print(f'{posterior_covariance[row, col]:15.10f}', end='')
+                if col < len(posterior_covariance[row]) - 1:
+                    print(',', end='')
+            print()
+
+        # Print predictive distribution
+        print(f'\nPredictive distribution ~ N({marginalize_mean[0, 0]:.5f}, {marginalize_variance[0, 0]:.5f})')
+        print('--------------------------------------------------')
+
+        # Get tenth and fiftieth posterior mean and covariance
+        if count == 10:
+            tenth_mean = deepcopy(posterior_mean)
+            tenth_covariance = deepcopy(posterior_covariance)
+        elif count == 50:
+            fiftieth_mean = deepcopy(posterior_mean)
+            fiftieth_covariance = deepcopy(posterior_covariance)
+
+        # Break the loop if it converges
+        if np.linalg.norm(posterior_mean - prior_mean) < 0.00001:
+            break
+
+        # Update prior
         prior_mean = posterior_mean
         prior_covariance = posterior_covariance
 
-        if count > 50:
-            break
+    return points, posterior_mean, posterior_covariance, tenth_mean, tenth_covariance, fiftieth_mean, fiftieth_covariance
 
 
 def create_design_matrix(x: float, basis: int) -> np.ndarray:

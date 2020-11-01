@@ -20,3 +20,4 @@
 
 ## Prerequisites
 * numpy >= 1.9.2
+* matplotlib >= 3.3.2

@@ -20,7 +20,7 @@ def polynomial_basis_linear_model_data_generator(basis: int, variance: float, om
         raise ValueError(f"Basis number: {basis} and number of omega: {len(omega)} don't match")
 
     x = np.random.uniform(-1, 1)
-    y = univariate_gaussian_data_generator(0, np.sqrt(variance))
+    y = univariate_gaussian_data_generator(0, variance)
     for power, w in enumerate(omega):
         y += w * np.power(x, power)
     info_log(f'Get data point ({x}, {y})')

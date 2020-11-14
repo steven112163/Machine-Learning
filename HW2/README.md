@@ -11,4 +11,4 @@
 ```
 
 ## Prerequisites
-* numpy >= 1.9.2
+* numpy >= 1.19.2

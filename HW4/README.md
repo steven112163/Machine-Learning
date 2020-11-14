@@ -15,5 +15,6 @@
 ```
 
 ## Prerequisites
-* numpy >= 1.9.2
+* numpy >= 1.19.2
 * matplotlib >= 3.3.2
+* scipy >= 1.5.4

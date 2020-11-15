@@ -1,6 +1,7 @@
 import argparse
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.special import expit, expm1
 from scipy.linalg import inv
 
@@ -43,8 +44,8 @@ def logistic_regression(num_of_points: int, mean_of_x1: float, variance_of_x1: f
 
     # Set up Φ
     phi = np.ones((num_of_points * 2, 3))
-    phi[:num_of_points, 0:2] = d1
-    phi[num_of_points:, 0:2] = d2
+    phi[:num_of_points, :2] = d1
+    phi[num_of_points:, :2] = d2
 
     # Set up group number for each data point
     group = np.zeros((num_of_points * 2, 1), dtype=int)
@@ -53,12 +54,11 @@ def logistic_regression(num_of_points: int, mean_of_x1: float, variance_of_x1: f
     # Get gradient descent result
     gd_omega = gradient_descent(phi, group)
 
-    print(gd_omega)
-
     # Get Newton method result
     nm_omega = newton_method(phi, group, num_of_points)
 
-    print(nm_omega)
+    # Print the results
+    print_results(num_of_points, phi, group, gd_omega, nm_omega)
 
 
 def gradient_descent(phi: np.ndarray, group: np.ndarray) -> np.ndarray:
@@ -113,14 +113,8 @@ def newton_method(phi: np.ndarray, group: np.ndarray, num_of_points: int) -> np.
         old_omega = omega.copy()
 
         # Fill in values in the diagonal of D matrix
-        '''for i in range(num_of_points * 2):
-            exponential = np.exp(-phi[i].dot(omega))
-            if np.isinf(exponential):
-                d[i][i] = 1
-            else:
-                d[i][i] = exponential / np.power(1 + exponential, 2)'''
-        product = -phi.dot(omega)
-        diagonal = (expm1(product) + 1) * np.power(expit(product), 2)
+        product = phi.dot(omega)
+        diagonal = (expm1(-product) + 1) * np.power(expit(product), 2)
         np.fill_diagonal(d, diagonal)
 
         # Set up hessian matrix
@@ -148,7 +142,118 @@ def get_delta_j(phi: np.ndarray, omega: np.ndarray, group: np.ndarray) -> np.nda
     :param group: group of each data point
     :return: gradient J
     """
-    return phi.T.dot(expit(-phi.dot(omega)) - group)
+    return phi.T.dot(group - expit(phi.dot(omega)))
+
+
+def print_results(num_of_points: int, phi: np.ndarray, group: np.ndarray, gd_weight: np.ndarray,
+                  nm_weight: np.ndarray) -> None:
+    """
+    Print the results and draw the graph
+    :param num_of_points: number of data points
+    :param phi: Φ matrix
+    :param group: group of each data point
+    :param gd_weight: weight vector omega from gradient descent
+    :param nm_weight: weight vector omega from Newton's method
+    :return: None
+    """
+    # Get confusion matrix and classification result of gradient descent
+    gd_confusion = {'TP': 0, 'FP': 0, 'TN': 0, 'FN': 0}
+    gd_class1, gd_class2 = [], []
+    for idx in range(num_of_points * 2):
+        if phi[idx].dot(gd_weight) >= 0:
+            # Class D2
+            gd_class2.append(list(phi[idx, :2]))
+            if group[idx, 0] == 1:
+                gd_confusion['TP'] += 1
+            else:
+                gd_confusion['FP'] += 1
+        else:
+            # Class D1
+            gd_class1.append(list(phi[idx, :2]))
+            if group[idx, 0] == 0:
+                gd_confusion['TN'] += 1
+            else:
+                gd_confusion['FN'] += 1
+    gd_class1 = np.array(gd_class1)
+    gd_class2 = np.array(gd_class2)
+
+    # Get confusion matrix and classification result of Newton's method
+    nm_confusion = {'TP': 0, 'FP': 0, 'TN': 0, 'FN': 0}
+    nm_class1, nm_class2 = [], []
+    for idx in range(len(phi)):
+        if phi[idx].dot(nm_weight) >= 0:
+            # Class D2
+            nm_class2.append(list(phi[idx, :2]))
+            if group[idx, 0] == 1:
+                nm_confusion['TP'] += 1
+            else:
+                nm_confusion['FP'] += 1
+        else:
+            # Class D1
+            nm_class1.append(list(phi[idx, :2]))
+            if group[idx, 0] == 0:
+                nm_confusion['TN'] += 1
+            else:
+                nm_confusion['FN'] += 1
+    nm_class1 = np.array(nm_class1)
+    nm_class2 = np.array(nm_class2)
+
+    # Print results
+
+    # Print gradient descent
+    print('Gradient descent:\n\nw:')
+    for i in gd_weight:
+        print(f' {i[0]:.10f}')
+    print('\nConfusion Matrix:')
+    print('\t\tPredict cluster 1\tPredict cluster 2')
+    print(f'Is cluster 1\t\t{gd_confusion["TP"]}\t\t\t{gd_confusion["FN"]}')
+    print(f'Is cluster 2\t\t{gd_confusion["FP"]}\t\t\t{gd_confusion["TN"]}')
+    print(
+        f'\nSensitivity (Successfully predict cluster 1): {gd_confusion["TP"] / (gd_confusion["TP"] + gd_confusion["FN"])}')
+    print(
+        f'Specificity (Successfully predict cluster 2): {gd_confusion["TN"] / (gd_confusion["FP"] + gd_confusion["TN"])}')
+
+    print('\n----------------------------------------------------------')
+
+    # Print Newton's method
+    print("Newton's method:\n\nw:")
+    for i in nm_weight:
+        print(f' {i[0]:.10f}')
+    print('\nConfusion Matrix:')
+    print('\t\tPredict cluster 1\tPredict cluster 2')
+    print(f'Is cluster 1\t\t{nm_confusion["TP"]}\t\t\t{nm_confusion["FN"]}')
+    print(f'Is cluster 2\t\t{nm_confusion["FP"]}\t\t\t{nm_confusion["TN"]}')
+    print(
+        f'\nSensitivity (Successfully predict cluster 1): {nm_confusion["TP"] / (nm_confusion["TP"] + nm_confusion["FN"])}')
+    print(
+        f'Specificity (Successfully predict cluster 2): {nm_confusion["TN"] / (nm_confusion["FP"] + nm_confusion["TN"])}')
+
+    # Draw the graph
+
+    # Draw ground truth
+    plt.subplot(131)
+    plt.title('Ground truth')
+    plt.scatter(phi[:num_of_points, 0], phi[:num_of_points, 1], c='r')
+    plt.scatter(phi[num_of_points:, 0], phi[num_of_points:, 1], c='b')
+
+    # Draw gradient descent
+    plt.subplot(132)
+    plt.title('Gradient descent')
+    if gd_class1.size:
+        plt.scatter(gd_class1[:, 0], gd_class1[:, 1], c='r')
+    if gd_class2.size:
+        plt.scatter(gd_class2[:, 0], gd_class2[:, 1], c='b')
+
+    # Draw Newton's method
+    plt.subplot(133)
+    plt.title("Newton's method")
+    if nm_class1.size:
+        plt.scatter(nm_class1[:, 0], nm_class1[:, 1], c='r')
+    if nm_class2.size:
+        plt.scatter(nm_class2[:, 0], nm_class2[:, 1], c='b')
+
+    plt.tight_layout()
+    plt.show()
 
 
 def info_log(log: str) -> None:

@@ -1,7 +1,8 @@
 import argparse
 import sys
 import numpy as np
-from scipy.special import expit
+from scipy.special import expit, expm1
+from scipy.linalg import inv
 
 
 def univariate_gaussian_data_generator(mean: float, variance: float) -> float:
@@ -52,10 +53,11 @@ def logistic_regression(num_of_points: int, mean_of_x1: float, variance_of_x1: f
     # Get gradient descent result
     gd_omega = gradient_descent(phi, group)
 
+    print(gd_omega)
+
     # Get Newton method result
     nm_omega = newton_method(phi, group, num_of_points)
 
-    print(gd_omega)
     print(nm_omega)
 
 
@@ -66,8 +68,11 @@ def gradient_descent(phi: np.ndarray, group: np.ndarray) -> np.ndarray:
     :param group: group of each data point
     :return: weight vector omega
     """
+    info_log('== gradient descent ==')
+
     # Set up initial guess of omega
-    omega = np.random.rand(3, 1).astype(np.longdouble)
+    omega = np.random.rand(3, 1)
+    info_log(f'Initial omega:\n{omega}')
 
     # Get optimal weight vector omega
     count = 0
@@ -92,8 +97,11 @@ def newton_method(phi: np.ndarray, group: np.ndarray, num_of_points: int) -> np.
     :param num_of_points: number of data points
     :return: weight vector omega
     """
+    info_log("== Newton's method ==")
+
     # Set up initial guess of omega
-    omega = np.random.rand(3, 1).astype(np.longdouble)
+    omega = np.random.rand(3, 1)
+    info_log(f'Initial omega:\n{omega}')
 
     # Set up D matrix for hessian matrix
     d = np.zeros((num_of_points * 2, num_of_points * 2))
@@ -104,24 +112,27 @@ def newton_method(phi: np.ndarray, group: np.ndarray, num_of_points: int) -> np.
         count += 1
         old_omega = omega.copy()
 
-        # Fill values in diagonal of D matrix
-        for i in range(num_of_points * 2):
+        # Fill in values in the diagonal of D matrix
+        '''for i in range(num_of_points * 2):
             exponential = np.exp(-phi[i].dot(omega))
             if np.isinf(exponential):
                 d[i][i] = 1
             else:
-                d[i][i] = exponential / np.power(1 + exponential, 2)
+                d[i][i] = exponential / np.power(1 + exponential, 2)'''
+        product = -phi.dot(omega)
+        diagonal = (expm1(product) + 1) * np.power(expit(product), 2)
+        np.fill_diagonal(d, diagonal)
 
         # Set up hessian matrix
         hessian = phi.T.dot(d.dot(phi))
 
         # Update omega
-        if np.linalg.det(hessian) == 0:
-            # Use gradient descent if hessian is singular
-            omega += get_delta_j(phi, omega, group)
-        else:
+        try:
             # Use Newton method
-            omega += np.linalg.inv(hessian).dot(get_delta_j(phi, omega, group))
+            omega += inv(hessian).dot(get_delta_j(phi, omega, group))
+        except:
+            # Use gradient descent if hessian is singular or infinite
+            omega += get_delta_j(phi, omega, group)
 
         if np.linalg.norm(omega - old_omega) < 0.0001 or count > 1000:
             break
@@ -137,7 +148,7 @@ def get_delta_j(phi: np.ndarray, omega: np.ndarray, group: np.ndarray) -> np.nda
     :param group: group of each data point
     :return: gradient J
     """
-    return phi.T.dot(expit(phi.dot(omega)) - group)
+    return phi.T.dot(expit(-phi.dot(omega)) - group)
 
 
 def info_log(log: str) -> None:
@@ -217,4 +228,5 @@ if __name__ == '__main__':
         print(
             f'Data 2: ({univariate_gaussian_data_generator(mx2, vx2)}, {univariate_gaussian_data_generator(my2, vy2)})')
     else:
+        info_log('=== Logistic regression ===')
         logistic_regression(N, mx1, vx1, my1, vy1, mx2, vx2, my2, vy2)

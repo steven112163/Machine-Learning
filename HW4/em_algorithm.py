@@ -1,6 +1,109 @@
 import argparse
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
+from typing import Dict, Union, Tuple
+
+
+def em_algorithm(train_image: Dict[str, Union[int, np.ndarray]], train_label: Dict[str, Union[int, np.ndarray]],
+                 test_image: Dict[str, Union[int, np.ndarray]], test_label: Dict[str, Union[int, np.ndarray]]) -> None:
+    """
+    EM algorithm
+    :param train_image: Dictionary of image training data set
+    :param train_label: Dictionary of label training data set
+    :param test_image: Dictionary of image testing data set
+    :param test_label: Dictionary of label testing data set
+    :return: None
+    """
+    # Setup binary version of images
+    bin_images = train_image['images'].copy()
+    bin_images[bin_images < 128] = 0
+    bin_images[bin_images >= 128] = 1
+    bin_images = bin_images.astype(int)
+
+    # Initialize lambda (probability of each class), probability of 1 and responsibility of each image of each class
+    lam = np.full(10, 0.1)
+    probability = np.random.uniform(0.0, 1.0, (10, train_image['pixels']))
+    for class_num in range(10):
+        probability[class_num, :] /= np.sum(probability[class_num, :])
+    responsibility = np.zeros((train_image['num'], 10))
+
+    # Start EM algorithm
+    count = 0
+    while True:
+        old_probability = probability
+        count += 1
+
+        # Get new responsibility
+        responsibility = expectation_step(lam, probability, bin_images, train_image['num'], train_image['pixels'])
+
+        # Get new lambda and probability
+        lam, probability = maximization_step(responsibility, bin_images, train_image['num'], train_image['pixels'])
+
+        if np.linalg.norm(probability-old_probability) < 0.0001 or count > 20:
+            break
+
+
+def expectation_step(lam: np.ndarray, probability: np.ndarray, bin_images: np.ndarray, num_of_images: int,
+                     num_of_pixels: int) -> np.ndarray:
+    """
+    Expectation step (E step)
+    :param lam: lambda, probability of each class
+    :param probability: probability of 1
+    :param bin_images: binary images
+    :param num_of_images: number of images
+    :param num_of_pixels: number of pixels
+    :return: new responsibility
+    """
+    # Initialize new responsibility
+    new_responsibility = np.zeros((num_of_images, 10))
+
+    for image_num in range(num_of_images):
+        # For each image, compute the responsibility of each class
+        for class_num in range(10):
+            # w = λ * p^xi * (1-p)^(1-xi)
+            new_responsibility[image_num, class_num] = lam[class_num]
+            for pixel_num in range(num_of_pixels):
+                if bin_images[image_num, pixel_num] == 1:
+                    new_responsibility[image_num, class_num] *= probability[class_num, pixel_num]
+                else:
+                    new_responsibility[image_num, class_num] *= (1 - probability[class_num, pixel_num])
+        # Normalize all responsibilities of the image
+        new_responsibility[image_num, :] /= np.sum(new_responsibility[image_num, :])
+
+    return new_responsibility
+
+
+def maximization_step(responsibility: np.ndarray, bin_images: np.ndarray, num_of_images: int, num_of_pixels: int) -> \
+        Tuple[np.ndarray, np.ndarray]:
+    """
+    Maximization step (M step)
+    :param responsibility: responsibility of each image of each class, from E step
+    :param bin_images: binary images
+    :param num_of_images: number of images
+    :param num_of_pixels: number of pixels
+    :return: new lambda (probability of each class) and new probability of 1
+    """
+    # Get sum of responsibilities of each class
+    sum_of_responsibility = np.zeros(10)
+    for class_num in range(10):
+        sum_of_responsibility[class_num] += np.sum(responsibility[:, class_num])
+
+    # Initialize new probability of 1
+    probability = np.zeros((10, num_of_pixels))
+
+    # Get new probability of each class of each pixel
+    for class_num in range(10):
+        for pixel_num in range(num_of_pixels):
+            # p = Σ(responsibility * x) / Σ(responsibility)
+            probability[class_num, pixel_num] += np.sum(
+                np.multiply(responsibility[:, class_num], bin_images[:, class_num]))
+            probability[class_num, pixel_num] /= sum_of_responsibility[class_num]
+
+    # Get lambda
+    lam = sum_of_responsibility / np.sum(sum_of_responsibility)
+
+    return lam, probability
 
 
 def info_log(log: str) -> None:
@@ -102,3 +205,10 @@ if __name__ == '__main__':
     _, num_te_labels = np.fromfile(file=te_label, dtype=np.dtype('>i4'), count=2)
     testing_labels = np.fromfile(file=te_label, dtype=np.dtype('>B'))
     te_label.close()
+
+    # Start EM algorithm
+    info_log('=== EM Algorithm ===')
+    em_algorithm({'num': num_tr_images, 'pixels': num_tr_pixels, 'images': training_images},
+                 {'num': num_tr_labels, 'labels': training_labels},
+                 {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
+                 {'num': num_te_labels, 'labels': testing_labels})

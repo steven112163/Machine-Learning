@@ -58,6 +58,13 @@ def em_algorithm(train_image: Dict[str, Union[int, np.ndarray]],
     # Get the matching of unknown to real class
     matching = get_unknown_to_real(count_of_unknown_to_real)
 
+    # Get the prediction matrix of result to real class
+    result = predict_result_to_real(lam, probability, bin_images, train_image['num'], train_image['pixels'],
+                                    train_label['labels'], matching)
+
+    # Print result imaginations
+    result_imaginations(probability, matching, train_image['rows'], train_image['cols'])
+
 
 @jit
 def expectation_step(lam: np.ndarray, probability: np.ndarray, bin_images: np.ndarray, num_of_images: int,
@@ -142,6 +149,7 @@ def show_imaginations(probability: np.ndarray, count: int, difference: float, ro
     imagination = (probability >= 0.5)
 
     # Print the imagination
+    print('')
     for class_num in range(10):
         print(f'class {class_num}:')
         for row_num in range(row):
@@ -153,6 +161,36 @@ def show_imaginations(probability: np.ndarray, count: int, difference: float, ro
 
     # Print current iteration and difference
     print(f'No. of Iteration: {count}, Difference: {difference:.12f}')
+
+
+def result_imaginations(probability: np.ndarray, matching: np.ndarray, row: int, col: int) -> None:
+    """
+    Show imaginations of each iteration
+    :param probability: probability of 1
+    :param matching: the result matching class from EM algorithm
+    :param row: number of rows in a image
+    :param col: number of columns in a image
+    :return: None
+    """
+    print(
+        '\n------------------------------------------------------------\n------------------------------------------------------------\n')
+    # Get imagination, if it's larger and equal to 0.5, then it's 1
+    imagination = (probability >= 0.5)
+
+    # Get list of matching
+    list_of_matching = matching.tolist()
+
+    # Print the imagination
+    for class_num in range(10):
+        # Get EM result class of real class
+        result_class = list_of_matching.index(class_num)
+        print(f'labeled class {class_num}:')
+        for row_num in range(row):
+            for col_num in range(col):
+                print(f'\033[93m1\033[00m', end=' ') if imagination[result_class, row_num * col + col_num] else print(
+                    '0', end=' ')
+            print('')
+        print('')
 
 
 @jit
@@ -217,6 +255,46 @@ def get_unknown_to_real(count: np.ndarray) -> np.ndarray:
             count[k][idx[1]] = -1
 
     return matching
+
+
+@jit
+def predict_result_to_real(lam: np.ndarray, probability: np.ndarray, bin_images: np.ndarray, num_of_images: int,
+                           num_of_pixels: int, train_labels: np.ndarray, matching: np.ndarray) -> np.ndarray:
+    """
+    Get the prediction matrix of result to real
+    :param lam: lambda, probability of each class
+    :param probability: probability of 1
+    :param bin_images: binary images
+    :param num_of_images: number of images
+    :param num_of_pixels: number of pixels
+    :param train_labels: training labels
+    :param matching: the result matching class from EM algorithm
+    :return: prediction matrix
+    """
+    # Count of each result class to each real class
+    # Row is result class. Column is the real class
+    prediction = np.zeros((10, 10))
+
+    # Result containing the probability of each class
+    result = np.zeros(10)
+
+    for image_num in range(num_of_images):
+        # For each image, compute the probability of each class
+        for class_num in range(10):
+            # λ * p^xi * (1-p)^(1-xi)
+            result[class_num] = lam[class_num]
+            for pixel_num in range(num_of_pixels):
+                if bin_images[image_num, pixel_num]:
+                    result[class_num] *= probability[class_num, pixel_num]
+                else:
+                    result[class_num] *= (1.0 - probability[class_num, pixel_num])
+        # Get the class index of the highest probability
+        result_class = np.argmax(result)
+
+        # Increment the count of result class to real class
+        prediction[matching[result_class], train_labels[image_num]] += 1
+
+    return prediction
 
 
 def info_log(log: str) -> None:

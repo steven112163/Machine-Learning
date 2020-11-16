@@ -1,7 +1,6 @@
 import argparse
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
 from typing import Dict, Union, Tuple
 from numba import jit
 
@@ -47,7 +46,7 @@ def em_algorithm(train_image: Dict[str, Union[int, np.ndarray]],
         show_imaginations(probability, count, np.linalg.norm(probability - old_probability), train_image['rows'],
                           train_image['cols'])
 
-        if np.linalg.norm(probability - old_probability) < 0.01 or count > 30:
+        if np.linalg.norm(probability - old_probability) < 0.15 or count > 30:
             break
 
     # Get the count of unknown to real class
@@ -64,6 +63,9 @@ def em_algorithm(train_image: Dict[str, Union[int, np.ndarray]],
 
     # Print result imaginations
     result_imaginations(probability, matching, train_image['rows'], train_image['cols'])
+
+    # Print confusion matrices
+    print_confusions(result, count, train_image['num'])
 
 
 @jit
@@ -295,6 +297,57 @@ def predict_result_to_real(lam: np.ndarray, probability: np.ndarray, bin_images:
         prediction[matching[result_class], train_labels[image_num]] += 1
 
     return prediction
+
+
+def print_confusions(result: np.ndarray, count: int, num_of_images: int) -> None:
+    """
+    Print confusion matrix of each label
+    :param result: count of each result class to each real class
+    :param count: total iteration count
+    :param num_of_images: number of training images
+    :return: None
+    """
+    # Setup error counts
+    error = num_of_images
+
+    # Print confusion matrix
+    for class_num in range(10):
+        tp, fp, tn, fn = compute_confusion(class_num, result)
+        error -= tp
+        print('\n------------------------------------------------------------\n')
+        print(f'Confusion Matrix {class_num}:')
+        print(f'\t\tPredict number {class_num}\tPredict not number {class_num}')
+        print(f'Is number {class_num}\t\t{tp}\t\t\t{fn}')
+        print(f"Isn't number {class_num}\t\t{fp}\t\t\t{tn}")
+        print(f'\nSensitivity (Successfully predict number {class_num}): {float(tp) / (tp + fn):.5f}')
+        print(f'Specificity (Successfully predict not number {class_num}): {float(tn) / (fp + tn):.5f}')
+
+    # Print total message
+    print(f'\nTotal iteration to converge: {count}')
+    print(f'Total error rate: {float(error) / num_of_images:.16f}')
+
+
+@jit
+def compute_confusion(class_num: int, result: np.ndarray) -> Tuple[int, int, int, int]:
+    """
+    Compute the confusion matrix of given real class
+    :param class_num: real class
+    :param result: count of each result class to each real class
+    :return: TP, FP, TN, FN
+    """
+    tp, fp, tn, fn = 0, 0, 0, 0
+    for prediction in range(10):
+        for real in range(10):
+            if prediction == class_num and real == class_num:
+                tp += result[prediction, real]
+            elif prediction == class_num:
+                fp += result[prediction, real]
+            elif real == class_num:
+                fn += result[prediction, real]
+            else:
+                tn += result[prediction, real]
+
+    return int(tp), int(fp), int(tn), int(fn)
 
 
 def info_log(log: str) -> None:

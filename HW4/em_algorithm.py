@@ -50,6 +50,14 @@ def em_algorithm(train_image: Dict[str, Union[int, np.ndarray]],
         if np.linalg.norm(probability - old_probability) < 0.01 or count > 30:
             break
 
+    # Get the count of unknown to real class
+    count_of_unknown_to_real = count_unknown_to_real(lam, probability, bin_images, train_image['num'],
+                                                     train_image['pixels'],
+                                                     train_label['labels'])
+
+    # Get the matching of unknown to real class
+    matching = get_unknown_to_real(count_of_unknown_to_real)
+
 
 @jit
 def expectation_step(lam: np.ndarray, probability: np.ndarray, bin_images: np.ndarray, num_of_images: int,
@@ -112,7 +120,7 @@ def maximization_step(responsibility: np.ndarray, bin_images: np.ndarray, num_of
                 probability[class_num, pixel_num] += responsibility[image_num, class_num] * bin_images[
                     image_num, pixel_num]
             probability[class_num, pixel_num] = (probability[class_num, pixel_num] + 1e-9) / (
-                        sum_of_responsibility[class_num] + 1e-9 * num_of_pixels)
+                    sum_of_responsibility[class_num] + 1e-9 * num_of_pixels)
         # Get lambda
         # if summation is 0, then lambda will be 1/(number of classes)
         lam[class_num] = (sum_of_responsibility[class_num] + 1e-9) / (np.sum(sum_of_responsibility) + 1e-9 * 10)
@@ -145,6 +153,70 @@ def show_imaginations(probability: np.ndarray, count: int, difference: float, ro
 
     # Print current iteration and difference
     print(f'No. of Iteration: {count}, Difference: {difference:.12f}')
+
+
+@jit
+def count_unknown_to_real(lam: np.ndarray, probability: np.ndarray, bin_images: np.ndarray, num_of_images: int,
+                          num_of_pixels: int, train_labels: np.ndarray) -> np.ndarray:
+    """
+    Count the number of the unknown class from EM algorithm to real class
+    :param lam: lambda, probability of each class
+    :param probability: probability of 1
+    :param bin_images: binary images
+    :param num_of_images: number of images
+    :param num_of_pixels: number of pixels
+    :param train_labels: training labels
+    :return: prediction of unknown classes to real classes
+    """
+    # Count of each class of unknown classification
+    # Row is unknown classification. Column is the real class
+    count = np.zeros((10, 10))
+
+    # Result containing the probability of each class
+    result = np.zeros(10)
+
+    for image_num in range(num_of_images):
+        # For each image, compute the probability of each class
+        for class_num in range(10):
+            # λ * p^xi * (1-p)^(1-xi)
+            result[class_num] = lam[class_num]
+            for pixel_num in range(num_of_pixels):
+                if bin_images[image_num, pixel_num]:
+                    result[class_num] *= probability[class_num, pixel_num]
+                else:
+                    result[class_num] *= (1.0 - probability[class_num, pixel_num])
+        # Get the class index of the highest probability
+        unknown_class = np.argmax(result)
+
+        # Increment the count of unknown class to real class
+        count[unknown_class, train_labels[image_num]] += 1
+
+    return count
+
+
+def get_unknown_to_real(count: np.ndarray) -> np.ndarray:
+    """
+    Get the unknown to real class matching
+    :param count: the count of unknown class to real class
+    :return: unknown class to real class matching
+    """
+    # Setup initial matching
+    matching = np.full(10, -1, dtype=int)
+
+    # Get result matching
+    for _ in range(10):
+        # Get the index of unknown to real
+        idx = np.unravel_index(np.argmax(count), (10, 10))
+
+        # Get a matching of a unknown class to a real class
+        matching[idx[0]] = idx[1]
+
+        # Set other count to -1 so that they will not match to the same real class
+        for k in range(10):
+            count[idx[0]][k] = -1
+            count[k][idx[1]] = -1
+
+    return matching
 
 
 def info_log(log: str) -> None:

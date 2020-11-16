@@ -3,18 +3,18 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Dict, Union, Tuple
+from numba import jit
 
 
-def em_algorithm(train_image: Dict[str, Union[int, np.ndarray]], train_label: Dict[str, Union[int, np.ndarray]],
-                 test_image: Dict[str, Union[int, np.ndarray]], test_label: Dict[str, Union[int, np.ndarray]]) -> None:
+def em_algorithm(train_image: Dict[str, Union[int, np.ndarray]],
+                 train_label: Dict[str, Union[int, np.ndarray]]) -> None:
     """
     EM algorithm
     :param train_image: Dictionary of image training data set
     :param train_label: Dictionary of label training data set
-    :param test_image: Dictionary of image testing data set
-    :param test_label: Dictionary of label testing data set
     :return: None
     """
+    info_log('Initialization')
     # Setup binary version of images
     bin_images = train_image['images'].copy()
     bin_images[bin_images < 128] = 0
@@ -28,6 +28,7 @@ def em_algorithm(train_image: Dict[str, Union[int, np.ndarray]], train_label: Di
         probability[class_num, :] /= np.sum(probability[class_num, :])
     responsibility = np.zeros((train_image['num'], 10))
 
+    info_log('Start em algorithm')
     # Start EM algorithm
     count = 0
     while True:
@@ -35,15 +36,22 @@ def em_algorithm(train_image: Dict[str, Union[int, np.ndarray]], train_label: Di
         count += 1
 
         # Get new responsibility
+        info_log(f'{count}: E step')
         responsibility = expectation_step(lam, probability, bin_images, train_image['num'], train_image['pixels'])
 
         # Get new lambda and probability
-        lam, probability = maximization_step(responsibility, bin_images, train_image['num'], train_image['pixels'])
+        info_log(f'{count}: M step')
+        lam, probability = maximization_step(responsibility, bin_images, train_image['pixels'])
 
-        if np.linalg.norm(probability-old_probability) < 0.0001 or count > 20:
+        # Print current imaginations
+        show_imaginations(probability, count, np.linalg.norm(probability - old_probability), train_image['rows'],
+                          train_image['cols'])
+
+        if np.linalg.norm(probability - old_probability) < 0.01 or count > 30:
             break
 
 
+@jit
 def expectation_step(lam: np.ndarray, probability: np.ndarray, bin_images: np.ndarray, num_of_images: int,
                      num_of_pixels: int) -> np.ndarray:
     """
@@ -64,23 +72,25 @@ def expectation_step(lam: np.ndarray, probability: np.ndarray, bin_images: np.nd
             # w = λ * p^xi * (1-p)^(1-xi)
             new_responsibility[image_num, class_num] = lam[class_num]
             for pixel_num in range(num_of_pixels):
-                if bin_images[image_num, pixel_num] == 1:
+                if bin_images[image_num, pixel_num]:
                     new_responsibility[image_num, class_num] *= probability[class_num, pixel_num]
                 else:
-                    new_responsibility[image_num, class_num] *= (1 - probability[class_num, pixel_num])
+                    new_responsibility[image_num, class_num] *= (1.0 - probability[class_num, pixel_num])
         # Normalize all responsibilities of the image
-        new_responsibility[image_num, :] /= np.sum(new_responsibility[image_num, :])
+        summation = np.sum(new_responsibility[image_num, :])
+        if summation:
+            new_responsibility[image_num, :] /= summation
 
     return new_responsibility
 
 
-def maximization_step(responsibility: np.ndarray, bin_images: np.ndarray, num_of_images: int, num_of_pixels: int) -> \
-        Tuple[np.ndarray, np.ndarray]:
+@jit
+def maximization_step(responsibility: np.ndarray, bin_images: np.ndarray, num_of_pixels: int) -> Tuple[
+    np.ndarray, np.ndarray]:
     """
     Maximization step (M step)
     :param responsibility: responsibility of each image of each class, from E step
     :param bin_images: binary images
-    :param num_of_images: number of images
     :param num_of_pixels: number of pixels
     :return: new lambda (probability of each class) and new probability of 1
     """
@@ -89,21 +99,52 @@ def maximization_step(responsibility: np.ndarray, bin_images: np.ndarray, num_of
     for class_num in range(10):
         sum_of_responsibility[class_num] += np.sum(responsibility[:, class_num])
 
-    # Initialize new probability of 1
+    # Initialize new probability of 1 and lambda
     probability = np.zeros((10, num_of_pixels))
+    lam = np.zeros(10)
 
     # Get new probability of each class of each pixel
     for class_num in range(10):
         for pixel_num in range(num_of_pixels):
-            # p = Σ(responsibility * x) / Σ(responsibility)
-            probability[class_num, pixel_num] += np.sum(
-                np.multiply(responsibility[:, class_num], bin_images[:, class_num]))
-            probability[class_num, pixel_num] /= sum_of_responsibility[class_num]
-
-    # Get lambda
-    lam = sum_of_responsibility / np.sum(sum_of_responsibility)
+            # p = Σ(responsibility * x) + 1e-9 / (Σ(responsibility) + 1e-9*pixels)
+            # If summation is 0, then p will be 1/pixels
+            for image_num in range(len(bin_images)):
+                probability[class_num, pixel_num] += responsibility[image_num, class_num] * bin_images[
+                    image_num, pixel_num]
+            probability[class_num, pixel_num] = (probability[class_num, pixel_num] + 1e-9) / (
+                        sum_of_responsibility[class_num] + 1e-9 * num_of_pixels)
+        # Get lambda
+        # if summation is 0, then lambda will be 1/(number of classes)
+        lam[class_num] = (sum_of_responsibility[class_num] + 1e-9) / (np.sum(sum_of_responsibility) + 1e-9 * 10)
 
     return lam, probability
+
+
+def show_imaginations(probability: np.ndarray, count: int, difference: float, row: int, col: int) -> None:
+    """
+    Show imaginations of each iteration
+    :param probability: probability of 1
+    :param count: current iteration
+    :param difference: difference between current probability and previous probability
+    :param row: number of rows in a image
+    :param col: number of columns in a image
+    :return: None
+    """
+    # Get imagination, if it's larger and equal to 0.5, then it's 1
+    imagination = (probability >= 0.5)
+
+    # Print the imagination
+    for class_num in range(10):
+        print(f'class {class_num}:')
+        for row_num in range(row):
+            for col_num in range(col):
+                print(f'\033[93m1\033[00m', end=' ') if imagination[class_num, row_num * col + col_num] else print('0',
+                                                                                                                   end=' ')
+            print('')
+        print('')
+
+    # Print current iteration and difference
+    print(f'No. of Iteration: {count}, Difference: {difference:.12f}')
 
 
 def info_log(log: str) -> None:
@@ -182,8 +223,7 @@ if __name__ == '__main__':
     info_log('=== Get image training set ===')
     _, num_tr_images, rows, cols = np.fromfile(file=tr_image, dtype=np.dtype('>i4'), count=4)
     training_images = np.fromfile(file=tr_image, dtype=np.dtype('>B'))
-    num_tr_pixels = rows * cols
-    training_images = np.reshape(training_images, (num_tr_images, num_tr_pixels))
+    training_images = np.reshape(training_images, (num_tr_images, rows * cols))
     tr_image.close()
 
     # Get label training set
@@ -192,23 +232,7 @@ if __name__ == '__main__':
     training_labels = np.fromfile(file=tr_label, dtype=np.dtype('>B'))
     tr_label.close()
 
-    # Get image testing set
-    info_log('=== Get image testing set ===')
-    _, num_te_images, rows, cols = np.fromfile(file=te_image, dtype=np.dtype('>i4'), count=4)
-    testing_images = np.fromfile(file=te_image, dtype=np.dtype('>B'))
-    num_te_pixels = rows * cols
-    testing_images = np.reshape(testing_images, (num_te_images, num_te_pixels))
-    te_image.close()
-
-    # Get label testing set
-    info_log('=== Get label testing set ===')
-    _, num_te_labels = np.fromfile(file=te_label, dtype=np.dtype('>i4'), count=2)
-    testing_labels = np.fromfile(file=te_label, dtype=np.dtype('>B'))
-    te_label.close()
-
     # Start EM algorithm
     info_log('=== EM Algorithm ===')
-    em_algorithm({'num': num_tr_images, 'pixels': num_tr_pixels, 'images': training_images},
-                 {'num': num_tr_labels, 'labels': training_labels},
-                 {'num': num_te_images, 'pixels': num_te_pixels, 'images': testing_images},
-                 {'num': num_te_labels, 'labels': testing_labels})
+    em_algorithm({'num': num_tr_images, 'pixels': rows * cols, 'rows': rows, 'cols': cols, 'images': training_images},
+                 {'num': num_tr_labels, 'labels': training_labels})

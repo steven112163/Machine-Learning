@@ -314,7 +314,7 @@ def parse_arguments():
 if __name__ == '__main__':
     """
     Main function
-    command: python3 logistic_regression <N> <mx1> <vx1> <my1> <vy1> <mx2> <vx2> <my2> <vy2> [-m (0-1)] [-v (0-1)]
+    command: python3 logistic_regression.py <N> <mx1> <vx1> <my1> <vy1> <mx2> <vx2> <my2> <vy2> [-m (0-1)] [-v (0-1)]
     """
     # Get arguments
     args = parse_arguments()

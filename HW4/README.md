@@ -2,11 +2,11 @@
 
 ## Logistic Regression
 ```shell script
-./$ python3 logistic_regression <N> <mx1> <vx1> <my1> <vy1> <mx2> <vx2> <my2> <vy2> [-v (0-1)]
+./$ python3 logistic_regression.py <N> <mx1> <vx1> <my1> <vy1> <mx2> <vx2> <my2> <vy2> [-v (0-1)]
 ```
 ### Univariate Gaussian Data Generator
 ```shell script
-./$ python3 logistic_regression <N> <mx1> <vx1> <my1> <vy1> <mx2> <vx2> <my2> <vy2> -m 1 [-v (0-1)]
+./$ python3 logistic_regression.py <N> <mx1> <vx1> <my1> <vy1> <mx2> <vx2> <my2> <vy2> -m 1 [-v (0-1)]
 ```
 
 ## EM Algorithm

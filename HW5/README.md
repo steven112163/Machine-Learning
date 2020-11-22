@@ -1,6 +1,6 @@
 # Machine-Learning HW5
 
-## Logistic Regression  
+## Gaussian Process
 * mode 0: without optimization
 * mode 1: with optimization
 ```shell script

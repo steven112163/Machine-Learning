@@ -48,7 +48,7 @@ def gaussian_process(x_coord: np.ndarray, y_coord: np.ndarray, noise: float, alp
     # Draw the graph
     info_log('Draw the graph')
     plt.xlim(-60, 60)
-    plt.title('Gaussian process')
+    plt.title(f'Gaussian process, alpha={alpha:.3f}, length={length_scale:.3f}')
     plt.scatter(x_coord, y_coord, c='k')
     plt.plot(x_test.ravel(), mean, 'b')
     plt.fill_between(x_test.ravel(), upper_bound, lower_bound, color='r', alpha=0.5)

@@ -4,7 +4,7 @@
 * mode 0: without optimization
 * mode 1: with optimization
 ```shell script
-./$ python3 gaussian_process.py [-d input.data] <noise> [-m (0-1)] [-v (0-1)]
+./$ python3 gaussian_process.py [-d input.data] [-n noise] [-m (0-1)] [-v (0-1)]
 ```
 
 ## Prerequisites

@@ -3,14 +3,18 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
+from scipy.optimize import minimize
 
 
-def gaussian_process(x_coord: np.ndarray, y_coord: np.ndarray, noise: float) -> None:
+def gaussian_process(x_coord: np.ndarray, y_coord: np.ndarray, noise: float, alpha: float = 1.0,
+                     length_scale: float = 1.0) -> None:
     """
     Gaussian process
     :param x_coord: x coordinate of the points
     :param y_coord: y coordinate of the points
     :param noise: noise
+    :param alpha: scale mixture parameter, default is 1.0
+    :param length_scale: length scale parameter, default is 1.0
     :return: None
     """
     info_log('=== Gaussian process ===')
@@ -21,15 +25,15 @@ def gaussian_process(x_coord: np.ndarray, y_coord: np.ndarray, noise: float) -> 
 
     # Get covariance matrix
     info_log('Get covariance matrix')
-    covariance = rational_quadratic_kernel(x_coord, x_coord)
+    covariance = rational_quadratic_kernel(x_coord, x_coord, alpha, length_scale)
 
     # Get kernel of testing data to testing data
     info_log('Get kernel of testing data to testing data')
-    k_test = np.add(rational_quadratic_kernel(x_test, x_test), np.eye(len(x_test)) / noise)
+    k_test = np.add(rational_quadratic_kernel(x_test, x_test, alpha, length_scale), np.eye(len(x_test)) / noise)
 
     # Get kernel of training data to testing data
     info_log('Get kernel of training data to testing data')
-    k_train_test = rational_quadratic_kernel(x_coord, x_test)
+    k_train_test = rational_quadratic_kernel(x_coord, x_test, alpha, length_scale)
 
     # Get mean and variance
     info_log('Get mean and variance')
@@ -52,18 +56,33 @@ def gaussian_process(x_coord: np.ndarray, y_coord: np.ndarray, noise: float) -> 
     plt.show()
 
 
-def rational_quadratic_kernel(x_i: np.ndarray, x_j: np.ndarray, alpha: float = 1.0,
-                              length_scale: float = 1.0) -> np.ndarray:
+def rational_quadratic_kernel(x_i: np.ndarray, x_j: np.ndarray, alpha: float, length_scale: float) -> np.ndarray:
     """
     Rational quadratic kernel
     :param x_i: x coordinate of the points
     :param x_j: x coordinate of the points
-    :param alpha: scale mixture parameter, default is 1.0
-    :param length_scale: length scale parameter, default is 1.0
+    :param alpha: scale mixture parameter
+    :param length_scale: length scale parameter
     :return: gram matrix
     """
-    # (1 + d(xi, xj)^2 / 2αl^2)^(-α)
-    return np.power(1 + cdist(x_i, x_j, 'sqeuclidean') / (2 * alpha * np.power(length_scale, 2)), -alpha)
+    # variance * (1 + d(xi, xj)^2 / 2αl^2)^(-α)
+    return 1.0 * np.power(1 + cdist(x_i, x_j, 'sqeuclidean') / (2 * alpha * length_scale * length_scale), -alpha)
+
+
+def marginal_log_likelihood(theta: np.ndarray) -> float:
+    """
+    Marginal log likelihood of y => ln p(y|θ)
+    :param theta: array of alpha and length scale
+    :return: float
+    """
+    global x, y, points
+
+    # Get covariance matrix
+    covariance = rational_quadratic_kernel(x, x, alpha=theta[0], length_scale=theta[1])
+
+    # - ln p(y|θ) = 0.5*ln|C| + 0.5*y^T*C^(-1)*y + N/2*ln(2π)
+    return 0.5 * np.log(np.linalg.det(covariance)) + 0.5 * y.ravel().T.dot(np.linalg.inv(covariance)).dot(
+        y.ravel()) + points / 2.0 * np.log(2.0 * np.pi)
 
 
 def info_log(log: str) -> None:
@@ -109,7 +128,7 @@ def parse_arguments():
                         type=argparse.FileType('rb'))
     parser.add_argument('-n', '--noise', help='noise of the function generating data', default=5.0, type=float)
     parser.add_argument('-m', '--mode',
-                        help='0: gaussian process without optimization, 1: guassian process with optimization',
+                        help='0: gaussian process without optimization, 1: gaussian process with optimization',
                         default=0, type=check_int_range)
     parser.add_argument('-v', '--verbosity', help='verbosity level (0-1)', default=0, type=check_int_range)
 
@@ -131,8 +150,21 @@ if __name__ == '__main__':
     # Load data
     info_log('=== Load data ===')
     data = np.loadtxt(d, dtype=float)
+    points = len(data)
     x = data[:, 0].reshape(-1, 1)
     y = data[:, 1].reshape(-1, 1)
 
     # Start gaussian process
-    gaussian_process(x, y, n)
+    if not mode:
+        info_log('=== Without optimization ===')
+        gaussian_process(x, y, n)
+    else:
+        info_log('=== With optimization ===')
+
+        # Get optimized alpha and length scale
+        info_log('Get optimized parameters')
+        guess = np.array([1.0, 1.0])
+        res = minimize(marginal_log_likelihood, guess)
+
+        opt_alpha, opt_length_scale = res.x
+        gaussian_process(x, y, n, opt_alpha, opt_length_scale)

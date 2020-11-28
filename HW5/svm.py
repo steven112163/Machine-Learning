@@ -20,8 +20,8 @@ def linear_poly_rbf_comparison(training_image: np.ndarray, training_label: np.nd
     kernels = ['Linear', 'Polynomial', 'RBF']
 
     # Get performance of each kernel
-    for i, name in enumerate(kernels):
-        param = svm_parameter(f"-t {i} -q")
+    for idx, name in enumerate(kernels):
+        param = svm_parameter(f"-t {idx} -q")
         prob = svm_problem(training_label, training_image)
 
         print(f'# {name}')
@@ -32,6 +32,89 @@ def linear_poly_rbf_comparison(training_image: np.ndarray, training_label: np.nd
         end = time.time()
 
         print(f'Elapsed time = {end - start:.2f}s\n')
+
+
+def grid_search(training_image: np.ndarray, training_label: np.ndarray) -> None:
+    """
+    Grid search for best parameters of each kernel
+    :param training_image: training images
+    :param training_label: training labels
+    :return: None
+    """
+    # Kernel names
+    kernels = ['Linear', 'Polynomial', 'RBF']
+
+    # Parameters
+    cost = [np.power(10.0, i) for i in range(-1, 2)]
+    degree = [i for i in range(0, 3)]
+    gamma = [1.0 / 784] + [np.power(10.0, i) for i in range(-1, 1)]
+    constant = [i for i in range(-1, 2)]
+
+    # Best parameters and max accuracies
+    best_parameter = []
+    max_accuracy = []
+
+    # Find best parameters of each kernel
+    for idx, name in enumerate(kernels):
+        best_para = ''
+        max_acc = 0.0
+        if name == 'Linear':
+            info_log('# Linear')
+            for c in cost:
+                parameters = f'-c {c}'
+                acc = grid_search_cv(training_image, training_label, f'-t {idx} ' + parameters)
+
+                if acc > max_acc:
+                    max_acc = acc
+                    best_para = parameters
+            best_parameter.append(best_para)
+            max_accuracy.append(max_acc)
+        elif name == 'Polynomial':
+            info_log('# Polynomial')
+            for c in cost:
+                for d in degree:
+                    for g in gamma:
+                        for const in constant:
+                            parameters = f'-c {c} -d {d} -g {g} -r {const}'
+                            acc = grid_search_cv(training_image, training_label, f'-t {idx} ' + parameters)
+
+                            if acc > max_acc:
+                                max_acc = acc
+                                best_para = parameters
+            best_parameter.append(best_para)
+            max_accuracy.append(max_acc)
+        else:
+            info_log('# RBF')
+            for c in cost:
+                for g in gamma:
+                    parameters = f'-t {idx} -c {c} -g {g}'
+                    acc = grid_search_cv(training_image, training_label, f'-t {idx} ' + parameters)
+
+                    if acc > max_acc:
+                        max_acc = acc
+                        best_para = parameters
+            best_parameter.append(best_para)
+            max_accuracy.append(max_acc)
+
+    # Print results
+    print('-------------------------------------------------------------------')
+    for idx, name in enumerate(kernels):
+        print(f'# {name}')
+        print(f'\tMax accuracy: {max_accuracy[idx]}')
+        print(f'\tBest parameters: {best_parameter[idx]}\n')
+
+
+def grid_search_cv(training_image, training_label, parameters: str) -> float:
+    """
+    Cross validation for the given kernel and parameters
+    :param training_image: training images
+    :param training_label: training labels
+    :param parameters: given parameters
+    :return: accuracy
+    """
+    param = svm_parameter(parameters + ' -v 3 -q')
+    prob = svm_problem(training_label, training_image)
+    return svm_train(prob, param)
 
 
 def linear_kernel(x: np.ndarray, y: np.ndarray) -> np.ndarray:
@@ -153,19 +236,26 @@ if __name__ == '__main__':
     # Load training images
     info_log('=== Loading training images ===')
     tr_image = np.loadtxt(file_of_training_image, delimiter=',')
+    file_of_training_image.close()
 
     # Load training labels
     info_log('=== Loading training labels ===')
     tr_label = np.loadtxt(file_of_training_label, dtype=int, delimiter=',')
+    file_of_training_label.close()
 
     # Load testing images
     info_log('=== Loading testing images ===')
     te_image = np.loadtxt(file_of_testing_image, delimiter=',')
+    file_of_testing_image.close()
 
     # Load testing labels
     info_log('=== Loading testing labels ===')
     te_label = np.loadtxt(file_of_testing_label, dtype=int, delimiter=',')
+    file_of_testing_label.close()
 
     if mode == 0:
         info_log('=== Comparison of linear, polynomial and RBF kernels ===')
         linear_poly_rbf_comparison(tr_image, tr_label, te_image, te_label)
+    elif mode == 1:
+        info_log('=== Grid search ===')
+        grid_search(tr_image, tr_label)

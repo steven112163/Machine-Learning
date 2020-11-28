@@ -61,8 +61,8 @@ def grid_search(training_image: np.ndarray, training_label: np.ndarray) -> None:
         if name == 'Linear':
             info_log('# Linear')
             for c in cost:
-                parameters = f'-c {c}'
-                acc = grid_search_cv(training_image, training_label, f'-t {idx} ' + parameters)
+                parameters = f'-t {idx} -c {c}'
+                acc = grid_search_cv(training_image, training_label, parameters)
 
                 if acc > max_acc:
                     max_acc = acc
@@ -75,8 +75,8 @@ def grid_search(training_image: np.ndarray, training_label: np.ndarray) -> None:
                 for d in degree:
                     for g in gamma:
                         for const in constant:
-                            parameters = f'-c {c} -d {d} -g {g} -r {const}'
-                            acc = grid_search_cv(training_image, training_label, f'-t {idx} ' + parameters)
+                            parameters = f'-t {idx} -c {c} -d {d} -g {g} -r {const}'
+                            acc = grid_search_cv(training_image, training_label, parameters)
 
                             if acc > max_acc:
                                 max_acc = acc
@@ -88,7 +88,7 @@ def grid_search(training_image: np.ndarray, training_label: np.ndarray) -> None:
             for c in cost:
                 for g in gamma:
                     parameters = f'-t {idx} -c {c} -g {g}'
-                    acc = grid_search_cv(training_image, training_label, f'-t {idx} ' + parameters)
+                    acc = grid_search_cv(training_image, training_label, parameters)
 
                     if acc > max_acc:
                         max_acc = acc
@@ -100,21 +100,75 @@ def grid_search(training_image: np.ndarray, training_label: np.ndarray) -> None:
     print('-------------------------------------------------------------------')
     for idx, name in enumerate(kernels):
         print(f'# {name}')
-        print(f'\tMax accuracy: {max_accuracy[idx]}')
+        print(f'\tMax accuracy: {max_accuracy[idx]}%')
         print(f'\tBest parameters: {best_parameter[idx]}\n')
 
 
-def grid_search_cv(training_image, training_label, parameters: str) -> float:
+def grid_search_cv(training_image, training_label, parameters: str, is_kernel: bool = False) -> float:
     """
     Cross validation for the given kernel and parameters
     :param training_image: training images
     :param training_label: training labels
     :param parameters: given parameters
+    :param is_kernel: whether training_image is actually a precomputed kernel
     :return: accuracy
     """
     param = svm_parameter(parameters + ' -v 3 -q')
-    prob = svm_problem(training_label, training_image)
+    prob = svm_problem(training_label, training_image, isKernel=is_kernel)
     return svm_train(prob, param)
+
+
+def linear_rbf_combination(training_image: np.ndarray, training_label: np.ndarray,
+                           testing_image: np.ndarray, testing_label: np.ndarray) -> None:
+    """
+    Combination of linear and RBF kernels
+    :param training_image: training images
+    :param training_label: training labels
+    :param testing_image: testing images
+    :param testing_label: testing labels
+    :return: None
+    """
+    # Parameters
+    cost = [np.power(10.0, i) for i in range(-2, 3)]
+    gamma = [1.0 / 784] + [np.power(10.0, i) for i in range(-2, 3)]
+    rows, _ = training_image.shape
+
+    # Use grid search to find best parameters
+    linear = linear_kernel(training_image, training_image)
+    best_parameter = ''
+    best_gamma = 1.0
+    max_accuracy = 0.0
+    for c in cost:
+        for g in gamma:
+            rbf = rbf_kernel(training_image, training_image, g)
+
+            # The combination is linear + RBF, but np.arange is the required serial number from the library
+            combination = np.hstack((np.arange(1, rows + 1).reshape(-1, 1), linear + rbf))
+
+            parameters = f'-t 4 -c {c}'
+            acc = grid_search_cv(combination, training_label, parameters, True)
+            if acc > max_accuracy:
+                max_accuracy = acc
+                best_parameter = parameters
+                best_gamma = g
+
+    # Print best parameters and max accuracy
+    print('-------------------------------------------------------------------')
+    print('# Linear + RBF')
+    print(f'\tMax accuracy: {max_accuracy}%')
+    print(f'\tBest parameters: {best_parameter} -g {best_gamma}\n')
+
+    # Train the model using best parameters
+    rbf = rbf_kernel(training_image, training_image, best_gamma)
+    combination = np.hstack((np.arange(1, rows + 1).reshape(-1, 1), linear + rbf))
+    model = svm_train(svm_problem(training_label, combination, isKernel=True), svm_parameter(best_parameter + ' -q'))
+
+    # Make prediction using best parameters
+    rows, _ = testing_image.shape
+    linear = linear_kernel(testing_image, testing_image)
+    rbf = rbf_kernel(testing_image, testing_image, best_gamma)
+    combination = np.hstack((np.arange(0, rows).reshape(-1, 1), linear + rbf))
+    svm_predict(testing_label, combination, model)
 
 
 def linear_kernel(x: np.ndarray, y: np.ndarray) -> np.ndarray:
@@ -124,23 +178,10 @@ def linear_kernel(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     :param y: point y
     :return: linear distance between them
     """
-    return x.T.dot(y)
+    return x.dot(y.T)
 
 
-def polynomial_kernel(x: np.ndarray, y: np.ndarray, gamma: float = 2.0, c: float = 1.0, d: int = 2.0) -> np.ndarray:
-    """
-    Polynomial kernel (γ * <x, y> + c)^d
-    :param x: point x
-    :param y: point y
-    :param gamma: gamma coefficient
-    :param c: constant
-    :param d: degree
-    :return: polynomial distance between them
-    """
-    return np.power(gamma * linear_kernel(x, y) + c, d)
-
-
-def rbf_kernel(x: np.ndarray, y: np.ndarray, gamma: float = 2.0) -> np.ndarray:
+def rbf_kernel(x: np.ndarray, y: np.ndarray, gamma: float) -> np.ndarray:
     """
     RBF kernel exp^(γ * ||x - y||^2)
     :param x: point x
@@ -148,7 +189,7 @@ def rbf_kernel(x: np.ndarray, y: np.ndarray, gamma: float = 2.0) -> np.ndarray:
     :param gamma: gamma coefficient
     :return: polynomial distance between them
     """
-    return np.exp(gamma * cdist(x, y, 'sqeuclidean'))
+    return np.exp(-gamma * cdist(x, y, 'sqeuclidean'))
 
 
 def info_log(log: str) -> None:
@@ -259,3 +300,6 @@ if __name__ == '__main__':
     elif mode == 1:
         info_log('=== Grid search ===')
         grid_search(tr_image, tr_label)
+    else:
+        info_log('=== Combination of linear and RBF kernels ===')
+        linear_rbf_combination(tr_image, tr_label, te_image, te_label)

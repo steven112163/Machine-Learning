@@ -1,7 +1,37 @@
 import argparse
 import sys
 import numpy as np
+import time
 from scipy.spatial.distance import cdist
+from libsvm.svmutil import *
+
+
+def linear_poly_rbf_comparison(training_image: np.ndarray, training_label: np.ndarray, testing_image: np.ndarray,
+                               testing_label: np.ndarray) -> None:
+    """
+    Comparison of linear, polynomial and RBF kernels
+    :param training_image: training images
+    :param training_label: training labels
+    :param testing_image: testing images
+    :param testing_label: testing labels
+    :return: None
+    """
+    # Kernel names
+    kernels = ['Linear', 'Polynomial', 'RBF']
+
+    # Get performance of each kernel
+    for i, name in enumerate(kernels):
+        param = svm_parameter(f"-t {i} -q")
+        prob = svm_problem(training_label, training_image)
+
+        print(f'# {name}')
+
+        start = time.time()
+        model = svm_train(prob, param)
+        svm_predict(testing_label, testing_image, model)
+        end = time.time()
+
+        print(f'Elapsed time = {end - start:.2f}s\n')
 
 
 def linear_kernel(x: np.ndarray, y: np.ndarray) -> np.ndarray:
@@ -135,3 +165,7 @@ if __name__ == '__main__':
     # Load testing labels
     info_log('=== Loading testing labels ===')
     te_label = np.loadtxt(file_of_testing_label, dtype=int, delimiter=',')
+
+    if mode == 0:
+        info_log('=== Comparison of linear, polynomial and RBF kernels ===')
+        linear_poly_rbf_comparison(tr_image, tr_label, te_image, te_label)

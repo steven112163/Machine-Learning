@@ -1,6 +1,41 @@
 import argparse
 import sys
 import numpy as np
+from scipy.spatial.distance import cdist
+
+
+def linear_kernel(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """
+    Linear kernel, <x, y>
+    :param x: point x
+    :param y: point y
+    :return: linear distance between them
+    """
+    return x.T.dot(y)
+
+
+def polynomial_kernel(x: np.ndarray, y: np.ndarray, gamma: float = 2.0, c: float = 1.0, d: int = 2.0) -> np.ndarray:
+    """
+    Polynomial kernel (γ * <x, y> + c)^d
+    :param x: point x
+    :param y: point y
+    :param gamma: gamma coefficient
+    :param c: constant
+    :param d: degree
+    :return: polynomial distance between them
+    """
+    return np.power(gamma * linear_kernel(x, y) + c, d)
+
+
+def rbf_kernel(x: np.ndarray, y: np.ndarray, gamma: float = 2.0) -> np.ndarray:
+    """
+    RBF kernel exp^(γ * ||x - y||^2)
+    :param x: point x
+    :param y: point y
+    :param gamma: gamma coefficient
+    :return: polynomial distance between them
+    """
+    return np.exp(gamma * cdist(x, y, 'sqeuclidean'))
 
 
 def info_log(log: str) -> None:
@@ -62,7 +97,9 @@ def parse_arguments():
                         default='data/X_test.csv', type=argparse.FileType('r'))
     parser.add_argument('-tel', '--testing_label', help='File of label testing data',
                         default='data/Y_test.csv', type=argparse.FileType('r'))
-    parser.add_argument('-m', '--mode', help='TODO', default=0, type=check_mode_range)
+    parser.add_argument('-m', '--mode',
+                        help='0: linear, polynomial and RBF comparison. 1: soft-margin SVM. 2: linear+RBF, linear, polynomial and RBF comparison',
+                        default=0, type=check_mode_range)
     parser.add_argument('-v', '--verbosity', help='verbosity level (0-1)', default=0, type=check_verbosity_range)
 
     return parser.parse_args()
@@ -76,9 +113,25 @@ if __name__ == '__main__':
     """
     # Get arguments
     args = parse_arguments()
-    tr_image = args.training_image
-    tr_label = args.training_label
-    te_image = args.testing_image
-    te_label = args.testing_label
+    file_of_training_image = args.training_image
+    file_of_training_label = args.training_label
+    file_of_testing_image = args.testing_image
+    file_of_testing_label = args.testing_label
     mode = args.mode
     verbosity = args.verbosity
+
+    # Load training images
+    info_log('=== Loading training images ===')
+    tr_image = np.loadtxt(file_of_training_image, delimiter=',')
+
+    # Load training labels
+    info_log('=== Loading training labels ===')
+    tr_label = np.loadtxt(file_of_training_label, dtype=int, delimiter=',')
+
+    # Load testing images
+    info_log('=== Loading testing images ===')
+    te_image = np.loadtxt(file_of_testing_image, delimiter=',')
+
+    # Load testing labels
+    info_log('=== Loading testing labels ===')
+    te_label = np.loadtxt(file_of_testing_label, dtype=int, delimiter=',')

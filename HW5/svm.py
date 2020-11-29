@@ -34,11 +34,14 @@ def linear_poly_rbf_comparison(training_image: np.ndarray, training_label: np.nd
         print(f'Elapsed time = {end - start:.2f}s\n')
 
 
-def grid_search(training_image: np.ndarray, training_label: np.ndarray) -> None:
+def grid_search(training_image: np.ndarray, training_label: np.ndarray, testing_image: np.ndarray,
+                testing_label: np.ndarray) -> None:
     """
     Grid search for best parameters of each kernel
     :param training_image: training images
     :param training_label: training labels
+    :param testing_image: testing images
+    :param testing_label: testing labels
     :return: None
     """
     # Kernel names
@@ -96,12 +99,17 @@ def grid_search(training_image: np.ndarray, training_label: np.ndarray) -> None:
             best_parameter.append(best_para)
             max_accuracy.append(max_acc)
 
-    # Print results
+    # Print results and prediction
+    prob = svm_problem(training_label, training_image)
     print('-------------------------------------------------------------------')
     for idx, name in enumerate(kernels):
         print(f'# {name}')
         print(f'\tMax accuracy: {max_accuracy[idx]}%')
-        print(f'\tBest parameters: {best_parameter[idx]}\n')
+        print(f'\tBest parameters: {best_parameter[idx]}')
+
+        model = svm_train(prob, svm_parameter(best_parameter[idx] + ' -q'))
+        svm_predict(testing_label, testing_image, model)
+        print()
 
 
 def grid_search_cv(training_image: np.ndarray, training_label: np.ndarray, parameters: str,
@@ -300,7 +308,7 @@ if __name__ == '__main__':
         linear_poly_rbf_comparison(tr_image, tr_label, te_image, te_label)
     elif mode == 1:
         info_log('=== Grid search ===')
-        grid_search(tr_image, tr_label)
+        grid_search(tr_image, tr_label, te_image, te_label)
     else:
         info_log('=== Combination of linear and RBF kernels ===')
         linear_rbf_combination(tr_image, tr_label, te_image, te_label)

@@ -104,7 +104,8 @@ def grid_search(training_image: np.ndarray, training_label: np.ndarray) -> None:
         print(f'\tBest parameters: {best_parameter[idx]}\n')
 
 
-def grid_search_cv(training_image, training_label, parameters: str, is_kernel: bool = False) -> float:
+def grid_search_cv(training_image: np.ndarray, training_label: np.ndarray, parameters: str,
+                   is_kernel: bool = False) -> float:
     """
     Cross validation for the given kernel and parameters
     :param training_image: training images

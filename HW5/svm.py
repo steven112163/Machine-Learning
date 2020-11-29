@@ -130,7 +130,7 @@ def linear_rbf_combination(training_image: np.ndarray, training_label: np.ndarra
     """
     # Parameters
     cost = [np.power(10.0, i) for i in range(-2, 3)]
-    gamma = [1.0 / 784] + [np.power(10.0, i) for i in range(-2, 3)]
+    gamma = [1.0 / 784] + [np.power(10.0, i) for i in range(-3, 2)]
     rows, _ = training_image.shape
 
     # Use grid search to find best parameters
@@ -167,7 +167,7 @@ def linear_rbf_combination(training_image: np.ndarray, training_label: np.ndarra
     rows, _ = testing_image.shape
     linear = linear_kernel(testing_image, testing_image)
     rbf = rbf_kernel(testing_image, testing_image, best_gamma)
-    combination = np.hstack((np.arange(0, rows).reshape(-1, 1), linear + rbf))
+    combination = np.hstack((np.arange(1, rows + 1).reshape(-1, 1), linear + rbf))
     svm_predict(testing_label, combination, model)
 
 

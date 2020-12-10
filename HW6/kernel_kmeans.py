@@ -2,6 +2,38 @@ import argparse
 import sys
 import numpy as np
 from PIL import Image
+from scipy.spatial.distance import cdist
+
+
+def kernel(image: np.ndarray, gamma_s: float, gamma_c: float) -> np.ndarray:
+    """
+    Kernel function
+    It is the product of two RBF kernels
+    :param image: image array
+    :param gamma_s: gamma for first RBF kernel
+    :param gamma_c: gamma for second RBF kernel
+    :return: gram matrix
+    """
+    info_log('=== Calculate gram matrix ===')
+
+    # Get image shape
+    row, col, color = image.shape
+
+    # Compute color distance
+    color_distance = cdist(image.reshape(row * col, color), image.reshape(row * col, color), 'sqeuclidean')
+
+    # Get indices of a grid
+    grid = np.indices((row, col))
+    row_indices = grid[0]
+    col_indices = grid[1]
+
+    # Construct indices vector
+    indices = np.hstack((row_indices.reshape(-1, 1), col_indices.reshape(-1, 1)))
+
+    # Compute spatial distance
+    spatial_distance = cdist(indices, indices, 'sqeuclidean')
+
+    return np.multiply(np.exp(-gamma_s*spatial_distance), np.exp(-gamma_c*color_distance))
 
 
 def info_log(log: str) -> None:
@@ -70,7 +102,6 @@ if __name__ == '__main__':
                 [-v (0-1)]
     """
     # Get arguments
-    info_log('=== Parse arguments ===')
     args = parse_arguments()
     i1 = args.image1
     i2 = args.image2
@@ -81,3 +112,10 @@ if __name__ == '__main__':
     info_log('=== Read images ===')
     image_1 = Image.open(i1)
     image_2 = Image.open(i2)
+
+    # Convert image into numpy array
+    info_log('=== Convert images into numpy array ===')
+    image_1 = np.asarray(image_1)
+    image_2 = np.asarray(image_2)
+
+    print(kernel(image_1, 1.0, 1.0).shape)

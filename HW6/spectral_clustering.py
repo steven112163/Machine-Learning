@@ -70,7 +70,6 @@ if __name__ == '__main__':
                 [-c number_of_clusters] [-v (0-1)]
     """
     # Get arguments
-    info_log('=== Parse arguments ===')
     args = parse_arguments()
     i1 = args.image1
     i2 = args.image2
@@ -81,3 +80,8 @@ if __name__ == '__main__':
     info_log('=== Read images ===')
     image_1 = Image.open(i1)
     image_2 = Image.open(i2)
+
+    # Convert image into numpy array
+    info_log('=== Convert images into numpy array ===')
+    image1 = np.asarray(image_1)
+    image_2 = np.asarray(image_2)

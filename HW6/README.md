@@ -12,5 +12,5 @@
 
 ## Prerequisites
 * numpy >= 1.19.2
-* matplotlib >= 3.3.2
+* scipy >= 1.5.4
 * Pillow >= 7.2.0

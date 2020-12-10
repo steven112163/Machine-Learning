@@ -6,7 +6,56 @@ from scipy.spatial.distance import cdist
 from typing import List
 
 
-def initial_clustering(num_of_row: int, num_of_col: int, num_of_cluster: int, kernel: np.ndarray, mode: str = 'random'):
+def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_cluster: int, cluster: np.ndarray, kernel: np.ndarray,
+                  mode: int) -> None:
+    """
+    Kernel K-means
+    :param num_of_rows: number of rows
+    :param num_of_cols: number of columns
+    :param num_of_cluster: number of clusters
+    :param cluster: clusters from initial clustering
+    :param kernel: kernel
+    :param mode: strategy for choosing centers
+    :return: None
+    """
+    info_log('=== Kernel K-means ===')
+
+    # List storing images of clustering state
+    img = [capture_current_state(num_of_rows, num_of_cols, cluster)]
+
+    # Kernel k-means
+    current_cluster = cluster.copy()
+    # TODO
+
+    # Save gif
+    img[0].save(f'kernel_kmeans_{num_of_cluster}_{"random" if not mode else "kmeans++"}.gif', save_all=True,
+                append_images=img[1:], loop=0)
+
+
+def capture_current_state(num_of_rows: int, num_of_cols: int, cluster: np.ndarray) -> Image:
+    """
+    Capture current clustering
+    :param num_of_rows: number of rows
+    :param num_of_cols: number of columns
+    :param cluster: clusters from kernel k-means
+    :return: an image of current clustering
+    """
+    colors = np.array([[255, 0, 0],
+                       [0, 255, 0],
+                       [0, 0, 255]])
+    state = np.zeros((num_of_rows * num_of_cols, 3))
+
+    # Give every point a color according to its cluster
+    for p in range(num_of_rows * num_of_cols):
+        state[p, :] = colors[cluster[p], :]
+
+    state = state.reshape((num_of_rows, num_of_cols, 3))
+
+    return Image.fromarray(np.uint8(state))
+
+
+def initial_clustering(num_of_row: int, num_of_col: int, num_of_cluster: int, kernel: np.ndarray,
+                       mode: int) -> np.ndarray:
     """
     Initialization for kernel k-means
     :param: num_of_row: number of rows in the image
@@ -14,7 +63,7 @@ def initial_clustering(num_of_row: int, num_of_col: int, num_of_cluster: int, ke
     :param: num_of_cluster: number of clusters
     :param: kernel: kernel
     :param: mode: strategy for choosing centers
-    :return:
+    :return: clusters
     """
     # Get initial centers
     info_log('=== Get initial centers ===')
@@ -25,16 +74,18 @@ def initial_clustering(num_of_row: int, num_of_col: int, num_of_cluster: int, ke
     num_of_points = num_of_row * num_of_col
     cluster = np.zeros(num_of_points, dtype=int)
     for p in range(num_of_points):
+        # Compute the distance of every point to all centers
         distance = np.zeros(num_of_cluster)
         for idx, cen in enumerate(centers):
             seq_of_cen = cen[0] * num_of_row + cen[1]
             distance[idx] = kernel[p, p] + kernel[seq_of_cen, seq_of_cen] - 2 * kernel[p, seq_of_cen]
+        # Pick the index of minimum distance as the cluster of the point
         cluster[p] = np.argmin(distance)
 
     return cluster
 
 
-def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: str) -> List[List[int]]:
+def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: int) -> List[List[int]]:
     """
     Choose centers for initial clustering
     :param: num_of_row: number of rows in the image
@@ -43,7 +94,7 @@ def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: s
     :param: mode: strategy for choosing centers
     :return: list of indices of clusters' center
     """
-    if mode == 'random':
+    if not mode:
         # Random strategy
         return np.random.choice(100, (num_of_cluster, 2)).tolist()
     else:
@@ -79,7 +130,7 @@ def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: s
         return centers
 
 
-def kernel(image: np.ndarray, gamma_s: float, gamma_c: float) -> np.ndarray:
+def compute_kernel(image: np.ndarray, gamma_s: float, gamma_c: float) -> np.ndarray:
     """
     Kernel function
     It is the product of two RBF kernels
@@ -164,6 +215,9 @@ def parse_arguments():
     parser.add_argument('-ione', '--image1', help='First image filename', default='data/image1.png')
     parser.add_argument('-itwo', '--image2', help='Second image filename', default='data/image2.png')
     parser.add_argument('-c', '--cluster', help='Number of clusters', default=2, type=check_cluster_range)
+    parser.add_argument('-m', '--mode',
+                        help='Mode for initial clustering, 0: randomly initialized centers, 1: kmeans++', default=0,
+                        type=check_int_range)
     parser.add_argument('-v', '--verbosity', help='verbosity level (0-1)', default=0, type=check_int_range)
 
     return parser.parse_args()
@@ -173,13 +227,14 @@ if __name__ == '__main__':
     """
     Main function
     command: python3 kernel_kmeans.py [-ione first_image_filename] [-itwo second_image_filename] [-c number_of_clusters]
-                [-v (0-1)]
+                [-m (0-1)] [-v (0-1)]
     """
     # Get arguments
     args = parse_arguments()
     i1 = args.image1
     i2 = args.image2
     c = args.cluster
+    m = args.mode
     verbosity = args.verbosity
 
     # Read images
@@ -193,9 +248,11 @@ if __name__ == '__main__':
     image_2 = np.asarray(image_2)
 
     # Computer kernel
-    ker = kernel(image_1, 1.0, 1.0)
+    gram_matrix = compute_kernel(image_1, 1.0, 1.0)
 
     # Initial clustering
-    ro, co, _ = image_1.shape
-    clusters = initial_clustering(ro, co, c, ker, 'kmeans++')
-    print(clusters[:1000])
+    rows, columns, _ = image_1.shape
+    clusters = initial_clustering(rows, columns, c, gram_matrix, m)
+
+    # Start kernel k-means
+    kernel_kmeans(rows, columns, c, clusters, gram_matrix, m)

@@ -1,8 +1,12 @@
 # Machine-Learning HW6
 
-## Kernel K-means
+## Kernel K-means  
+|Mode|Description|
+|---|---|
+|0|randomly initialized centers|
+|1|kmeans++|
 ```shell script
-./$ python3 kernel_kmeans.py [-ione first_image_filename] [-itwo second_image_filename] [-c number_of_clusters] [-v (0-1)]
+./$ python3 kernel_kmeans.py [-ione first_image_filename] [-itwo second_image_filename] [-c number_of_clusters] [-m (0-1)] [-v (0-1)]
 ```
 
 ## Spectral Clustering

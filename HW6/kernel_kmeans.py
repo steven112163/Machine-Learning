@@ -3,6 +3,61 @@ import sys
 import numpy as np
 from PIL import Image
 from scipy.spatial.distance import cdist
+from typing import List
+
+
+def initial_clustering(num_of_cluster: int, mode: str = 'random'):
+    """
+    Initialization for kernel k-means
+    :param: num_of_cluster: number of clusters
+    :param: mode: strategy for choosing centers
+    :return:
+    """
+
+
+def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: str = 'random') -> List[List[int]]:
+    """
+    Choose centers for initial clustering
+    :param: num_of_row: number of rows in the image
+    :param: num_of_col: number of columns in the image
+    :param: num_of_cluster: number of clusters
+    :param: mode: strategy for choosing centers
+    :return: list of indices of clusters' center
+    """
+    if mode == 'random':
+        # Random strategy
+        return np.random.choice(100, (num_of_cluster, 2)).tolist()
+    else:
+        # k-means++ strategy
+        # Construct indices of a grid
+        grid = np.indices((num_of_row, num_of_col))
+        row_indices = grid[0]
+        col_indices = grid[1]
+
+        # Construct indices vector
+        indices = np.hstack((row_indices.reshape(-1, 1), col_indices.reshape(-1, 1)))
+
+        # Randomly pick first center
+        num_of_points = num_of_row * num_of_col
+        centers = [indices[np.random.choice(num_of_points, 1)[0]].tolist()]
+
+        # Find remaining centers
+        for _ in range(num_of_cluster - 1):
+            # Compute minimum distance for each point from all found centers
+            distance = np.zeros(num_of_points)
+            for idx, point in enumerate(indices):
+                min_distance = np.Inf
+                for cen in centers:
+                    dist = np.linalg.norm(point - cen)
+                    min_distance = dist if dist < min_distance else min_distance
+                distance[idx] = min_distance
+            # Square the distance and divide it by its sum to get probability
+            distance = np.power(distance, 2)
+            distance /= np.sum(distance)
+            # Get a new center
+            centers.append(indices[np.random.choice(num_of_points, 1, p=distance)[0]].tolist())
+
+        return centers
 
 
 def kernel(image: np.ndarray, gamma_s: float, gamma_c: float) -> np.ndarray:
@@ -33,7 +88,7 @@ def kernel(image: np.ndarray, gamma_s: float, gamma_c: float) -> np.ndarray:
     # Compute spatial distance
     spatial_distance = cdist(indices, indices, 'sqeuclidean')
 
-    return np.multiply(np.exp(-gamma_s*spatial_distance), np.exp(-gamma_c*color_distance))
+    return np.multiply(np.exp(-gamma_s * spatial_distance), np.exp(-gamma_c * color_distance))
 
 
 def info_log(log: str) -> None:
@@ -118,4 +173,4 @@ if __name__ == '__main__':
     image_1 = np.asarray(image_1)
     image_2 = np.asarray(image_2)
 
-    print(kernel(image_1, 1.0, 1.0).shape)
+    print(choose_center(100, 100, 2, 'k-means++'))

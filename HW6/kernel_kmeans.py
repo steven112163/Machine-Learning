@@ -6,16 +6,35 @@ from scipy.spatial.distance import cdist
 from typing import List
 
 
-def initial_clustering(num_of_cluster: int, mode: str = 'random'):
+def initial_clustering(num_of_row: int, num_of_col: int, num_of_cluster: int, kernel: np.ndarray, mode: str = 'random'):
     """
     Initialization for kernel k-means
+    :param: num_of_row: number of rows in the image
+    :param: num_of_col: number of columns in the image
     :param: num_of_cluster: number of clusters
+    :param: kernel: kernel
     :param: mode: strategy for choosing centers
     :return:
     """
+    # Get initial centers
+    info_log('=== Get initial centers ===')
+    centers = choose_center(num_of_row, num_of_col, num_of_cluster, mode)
+
+    # k-means
+    info_log('=== Initial k-means ===')
+    num_of_points = num_of_row * num_of_col
+    cluster = np.zeros(num_of_points, dtype=int)
+    for p in range(num_of_points):
+        distance = np.zeros(num_of_cluster)
+        for idx, cen in enumerate(centers):
+            seq_of_cen = cen[0] * num_of_row + cen[1]
+            distance[idx] = kernel[p, p] + kernel[seq_of_cen, seq_of_cen] - 2 * kernel[p, seq_of_cen]
+        cluster[p] = np.argmin(distance)
+
+    return cluster
 
 
-def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: str = 'random') -> List[List[int]]:
+def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: str) -> List[List[int]]:
     """
     Choose centers for initial clustering
     :param: num_of_row: number of rows in the image
@@ -173,4 +192,10 @@ if __name__ == '__main__':
     image_1 = np.asarray(image_1)
     image_2 = np.asarray(image_2)
 
-    print(choose_center(100, 100, 2, 'k-means++'))
+    # Computer kernel
+    ker = kernel(image_1, 1.0, 1.0)
+
+    # Initial clustering
+    ro, co, _ = image_1.shape
+    clusters = initial_clustering(ro, co, c, ker, 'kmeans++')
+    print(clusters[:1000])

@@ -27,7 +27,7 @@ def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_cluster: int, clust
                        [0, 255, 0],
                        [0, 0, 255]])
     if num_of_cluster > 3:
-        colors = np.append(colors, np.random.choice(256, (num_of_cluster - 3, 3)))
+        colors = np.append(colors, np.random.choice(256, (num_of_cluster - 3, 3)), axis=0)
 
     # List storing images of clustering state
     img = [capture_current_state(num_of_rows, num_of_cols, cluster, colors)]
@@ -298,6 +298,8 @@ def parse_arguments():
     parser.add_argument('-ione', '--image1', help='First image filename', default='data/image1.png')
     parser.add_argument('-itwo', '--image2', help='Second image filename', default='data/image2.png')
     parser.add_argument('-clu', '--cluster', help='Number of clusters', default=3, type=check_cluster_range)
+    parser.add_argument('-gs', '--gammas', help='Parameter gamma_s in the kernel', default=0.001, type=float)
+    parser.add_argument('-gc', '--gammac', help='Parameter gamma_c in the kernel', default=0.01, type=float)
     parser.add_argument('-m', '--mode',
                         help='Mode for initial clustering, 0: randomly initialized centers, 1: kmeans++', default=0,
                         type=check_int_range)
@@ -310,13 +312,15 @@ if __name__ == '__main__':
     """
     Main function
     command: python3 kernel_kmeans.py [-ione first_image_filename] [-itwo second_image_filename] [-c number_of_clusters]
-                [-m (0-1)] [-v (0-1)]
+                [-gs gamma_s] [-gc gamma_c] [-m (0-1)] [-v (0-1)]
     """
     # Get arguments
     args = parse_arguments()
     i1 = args.image1
     i2 = args.image2
     clu = args.cluster
+    gammas = args.gammas
+    gammac = args.gammac
     m = args.mode
     verbosity = args.verbosity
 
@@ -329,15 +333,15 @@ if __name__ == '__main__':
     images[0] = np.asarray(images[0])
     images[1] = np.asarray(images[1])
 
-    for idx, image in enumerate(images):
-        info_log(f'=== Image {idx} ===')
-        
+    for i, img in enumerate(images):
+        info_log(f'=== Image {i} ===')
+
         # Computer kernel
-        gram_matrix = compute_kernel(image, 0.001, 0.01)
+        gram_matrix = compute_kernel(img, gammas, gammac)
 
         # Initial clustering
-        rows, columns, _ = image.shape
+        rows, columns, _ = img.shape
         clusters = initial_clustering(rows, columns, clu, gram_matrix, m)
 
         # Start kernel k-means
-        kernel_kmeans(rows, columns, clu, clusters, gram_matrix, m, idx)
+        kernel_kmeans(rows, columns, clu, clusters, gram_matrix, m, i)

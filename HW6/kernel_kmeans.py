@@ -149,11 +149,9 @@ def initial_clustering(num_of_row: int, num_of_col: int, num_of_cluster: int, ke
     :return: clusters
     """
     # Get initial centers
-    info_log('=== Get initial centers ===')
     centers = choose_center(num_of_row, num_of_col, num_of_cluster, mode)
 
     # k-means
-    info_log('=== Initial k-means ===')
     num_of_points = num_of_row * num_of_col
     cluster = np.zeros(num_of_points, dtype=int)
     for p in range(num_of_points):
@@ -222,8 +220,6 @@ def compute_kernel(image: np.ndarray, gamma_s: float, gamma_c: float) -> np.ndar
     :param gamma_c: gamma for second RBF kernel
     :return: gram matrix
     """
-    info_log('=== Calculate gram matrix ===')
-
     # Get image shape
     row, col, color = image.shape
 
@@ -336,11 +332,13 @@ if __name__ == '__main__':
     for i, img in enumerate(images):
         info_log(f'=== Image {i} ===')
 
-        # Computer kernel
+        # Compute kernel
+        info_log('=== Calculate gram matrix ===')
         gram_matrix = compute_kernel(img, gammas, gammac)
 
         # Initial clustering
         rows, columns, _ = img.shape
+        info_log('=== Perform initial clustering ===')
         clusters = initial_clustering(rows, columns, clu, gram_matrix, m)
 
         # Start kernel k-means

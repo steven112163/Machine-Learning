@@ -1,5 +1,6 @@
 import argparse
 import sys
+import os
 import numpy as np
 from PIL import Image
 from scipy.spatial.distance import cdist
@@ -7,7 +8,7 @@ from typing import List
 
 
 def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_cluster: int, cluster: np.ndarray, kernel: np.ndarray,
-                  mode: int) -> None:
+                  mode: int, index: int) -> None:
     """
     Kernel K-means
     :param num_of_rows: number of rows
@@ -16,33 +17,115 @@ def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_cluster: int, clust
     :param cluster: clusters from initial clustering
     :param kernel: kernel
     :param mode: strategy for choosing centers
+    :param index: index of the image
     :return: None
     """
     info_log('=== Kernel K-means ===')
 
+    # Colors
+    colors = np.array([[255, 0, 0],
+                       [0, 255, 0],
+                       [0, 0, 255]])
+    if num_of_cluster > 3:
+        colors = np.append(colors, np.random.choice(256, (num_of_cluster - 3, 3)))
+
     # List storing images of clustering state
-    img = [capture_current_state(num_of_rows, num_of_cols, cluster)]
+    img = [capture_current_state(num_of_rows, num_of_cols, cluster, colors)]
 
     # Kernel k-means
     current_cluster = cluster.copy()
-    # TODO
+    count = 0
+    iteration = 100
+    while True:
+        sys.stdout.write('\r')
+        sys.stdout.write(
+            f'[\033[96mINFO\033[00m] progress: [{"=" * int(20.0 * count / iteration):20}] {count}/{iteration}')
+        sys.stdout.flush()
+
+        # Get new cluster
+        new_cluster = kernel_clustering(num_of_rows * num_of_cols, num_of_cluster, kernel, current_cluster)
+
+        # Capture new state
+        img.append(capture_current_state(num_of_rows, num_of_cols, new_cluster, colors))
+
+        if np.linalg.norm((new_cluster - current_cluster), ord=2) < 0.0001 or count >= iteration:
+            break
+
+        current_cluster = new_cluster.copy()
+        count += 1
 
     # Save gif
-    img[0].save(f'kernel_kmeans_{num_of_cluster}_{"random" if not mode else "kmeans++"}.gif', save_all=True,
-                append_images=img[1:], loop=0)
+    print()
+    filename = f'./output/kernel_kmeans_{index}_cluster{num_of_cluster}_{"random" if not mode else "kmeans++"}.gif'
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=100)
 
 
-def capture_current_state(num_of_rows: int, num_of_cols: int, cluster: np.ndarray) -> Image:
+def kernel_clustering(num_of_points: int, num_of_cluster: int, kernel: np.ndarray, cluster: np.ndarray) -> np.ndarray:
+    """
+    Kernel k-means clustering
+    :param num_of_points: number of data points in the image
+    :param num_of_cluster: number of clusters
+    :param kernel: kernel
+    :param cluster: current cluster
+    :return: new cluster
+    """
+    # Get number of members in each cluster
+    num_of_members = np.array([np.sum(np.where(cluster == c, 1, 0)) for c in range(num_of_cluster)])
+
+    # Get sum of pairwise kernel distances of each cluster
+    pairwise = get_sum_of_pairwise_distance(num_of_points, num_of_cluster, num_of_members, kernel, cluster)
+
+    new_cluster = np.zeros(num_of_points, dtype=int)
+    for p in range(num_of_points):
+        distance = np.zeros(num_of_cluster)
+        for c in range(num_of_cluster):
+            distance[c] += kernel[p, p] + pairwise[c]
+
+            # Get distance from given data point to others in the target cluster
+            dist_to_others = np.sum(kernel[p, :][np.where(cluster == c)])
+            distance[c] -= 2.0 / num_of_members[c] * dist_to_others
+        new_cluster[p] = np.argmin(distance)
+
+    return new_cluster
+
+
+def get_sum_of_pairwise_distance(num_of_points: int, num_of_cluster: int, num_of_members: np.ndarray,
+                                 kernel: np.ndarray, cluster: np.ndarray) -> np.ndarray:
+    """
+    Get sum of pairwise kernel distances of each cluster
+    :param num_of_points: number of data points in the image
+    :param num_of_cluster: number of clusters
+    :param num_of_members: number of members in each cluster
+    :param kernel: kernel
+    :param cluster: current cluster
+    :return: sum of pairwise kernel distances of each cluster
+    """
+    pairwise = np.zeros(num_of_cluster)
+    for c in range(num_of_cluster):
+        tmp_kernel = kernel.copy()
+        for p in range(num_of_points):
+            # Set distance to 0 if the point doesn't belong to the cluster
+            if cluster[p] != c:
+                tmp_kernel[p, :] = 0
+                tmp_kernel[:, p] = 0
+        pairwise[c] = np.sum(tmp_kernel)
+
+    # Avoid division by 0
+    num_of_members[num_of_members == 0] = 1
+
+    return pairwise / num_of_members ** 2
+
+
+def capture_current_state(num_of_rows: int, num_of_cols: int, cluster: np.ndarray, colors: np.ndarray) -> Image:
     """
     Capture current clustering
     :param num_of_rows: number of rows
     :param num_of_cols: number of columns
     :param cluster: clusters from kernel k-means
+    :param colors: color of each cluster
     :return: an image of current clustering
     """
-    colors = np.array([[255, 0, 0],
-                       [0, 255, 0],
-                       [0, 0, 255]])
     state = np.zeros((num_of_rows * num_of_cols, 3))
 
     # Give every point a color according to its cluster
@@ -214,7 +297,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Kernel K-means')
     parser.add_argument('-ione', '--image1', help='First image filename', default='data/image1.png')
     parser.add_argument('-itwo', '--image2', help='Second image filename', default='data/image2.png')
-    parser.add_argument('-c', '--cluster', help='Number of clusters', default=2, type=check_cluster_range)
+    parser.add_argument('-clu', '--cluster', help='Number of clusters', default=3, type=check_cluster_range)
     parser.add_argument('-m', '--mode',
                         help='Mode for initial clustering, 0: randomly initialized centers, 1: kmeans++', default=0,
                         type=check_int_range)
@@ -233,26 +316,28 @@ if __name__ == '__main__':
     args = parse_arguments()
     i1 = args.image1
     i2 = args.image2
-    c = args.cluster
+    clu = args.cluster
     m = args.mode
     verbosity = args.verbosity
 
     # Read images
     info_log('=== Read images ===')
-    image_1 = Image.open(i1)
-    image_2 = Image.open(i2)
+    images = [Image.open(i1), Image.open(i2)]
 
     # Convert image into numpy array
     info_log('=== Convert images into numpy array ===')
-    image_1 = np.asarray(image_1)
-    image_2 = np.asarray(image_2)
+    images[0] = np.asarray(images[0])
+    images[1] = np.asarray(images[1])
 
-    # Computer kernel
-    gram_matrix = compute_kernel(image_1, 1.0, 1.0)
+    for idx, image in enumerate(images):
+        info_log(f'=== Image {idx} ===')
+        
+        # Computer kernel
+        gram_matrix = compute_kernel(image, 0.001, 0.01)
 
-    # Initial clustering
-    rows, columns, _ = image_1.shape
-    clusters = initial_clustering(rows, columns, c, gram_matrix, m)
+        # Initial clustering
+        rows, columns, _ = image.shape
+        clusters = initial_clustering(rows, columns, clu, gram_matrix, m)
 
-    # Start kernel k-means
-    kernel_kmeans(rows, columns, c, clusters, gram_matrix, m)
+        # Start kernel k-means
+        kernel_kmeans(rows, columns, clu, clusters, gram_matrix, m, idx)

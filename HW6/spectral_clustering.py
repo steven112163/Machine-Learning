@@ -7,31 +7,22 @@ from kernel_kmeans import capture_current_state, compute_kernel
 from numba import jit
 
 
-def spectral_clustering(num_of_rows: int, num_of_cols: int, kernel: np.ndarray, cut: int, num_of_clusters: int,
-                        mode: int, index: int) -> None:
+def spectral_clustering(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: np.ndarray, mode: int,
+                        cut: int, index: int) -> None:
     """
     Spectral clustering
     :param num_of_rows: number of rows
     :param num_of_cols: number of columns
-    :param kernel: kernel
-    :param cut: cut type
     :param num_of_clusters: number of clusters
+    :param matrix_u: matrix U containing eigenvectors
     :param mode: strategy for choosing centers
+    :param cut: cut type
     :param index: index of the images
     :return: None
     """
-    # Get matrix U containing eigenvectors
-    info_log('=== Calculate matrix U ===')
-    matrix_u = compute_matrix_u(kernel, cut, num_of_clusters)
-    if cut:
-        # Normalized cut
-        sum_of_each_row = np.sum(matrix_u, axis=1)
-        for idx in range(len(matrix_u)):
-            matrix_u[idx, :] /= sum_of_each_row[idx]
-
     # Find initial centers
     info_log('=== Find initial centers of each cluster ===')
-    centers = initial_centers(num_of_rows * num_of_cols, num_of_clusters, matrix_u, mode)
+    centers = initial_centers(num_of_rows, num_of_cols, num_of_clusters, matrix_u, mode)
 
     # K-means
     info_log('=== K-means ===')
@@ -39,12 +30,12 @@ def spectral_clustering(num_of_rows: int, num_of_cols: int, kernel: np.ndarray, 
 
 
 @jit
-def compute_matrix_u(matrix_w: np.ndarray, cut: int, num_of_cluster: int) -> np.ndarray:
+def compute_matrix_u(matrix_w: np.ndarray, cut: int, num_of_clusters: int) -> np.ndarray:
     """
     Compute matrix U containing eigenvectors
     :param matrix_w: weight matrix W
     :param cut: cut type
-    :param num_of_cluster: number of clusters
+    :param num_of_clusters: number of clusters
     :return: matrix U containing eigenvectors
     """
     # Get Laplacian matrix L and degree matrix D
@@ -59,7 +50,7 @@ def compute_matrix_u(matrix_w: np.ndarray, cut: int, num_of_cluster: int) -> np.
         for idx in range(len(matrix_d)):
             matrix_d[idx, idx] = 1.0 / np.sqrt(matrix_d[idx, idx])
         matrix_l = matrix_d.dot(matrix_l).dot(matrix_d)
-    # Ratio cut if not cut
+    # else is Ratio cut
 
     # Get eigenvalues and eigenvectors
     eigenvalues, eigenvectors = np.linalg.eig(matrix_l)
@@ -69,13 +60,15 @@ def compute_matrix_u(matrix_w: np.ndarray, cut: int, num_of_cluster: int) -> np.
     sort_idx = np.argsort(eigenvalues)
     sort_idx = sort_idx[eigenvalues[sort_idx] > 0]
 
-    return eigenvectors[sort_idx[:num_of_cluster]].T
+    return eigenvectors[sort_idx[:num_of_clusters]].T
 
 
-def initial_centers(num_of_points: int, num_of_clusters, matrix_u: np.ndarray, mode: int) -> np.ndarray:
+def initial_centers(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: np.ndarray,
+                    mode: int) -> np.ndarray:
     """
     Get initial centers based on the given mode strategy
-    :param num_of_points: number of data points
+    :param num_of_rows: number of rows
+    :param num_of_cols: number of columns
     :param num_of_clusters: number of clusters
     :param matrix_u: matrix U containing eigenvectors
     :param mode: strategy for choosing centers
@@ -83,27 +76,39 @@ def initial_centers(num_of_points: int, num_of_clusters, matrix_u: np.ndarray, m
     """
     if not mode:
         # Random strategy
-        return matrix_u[np.random.choice(num_of_points, num_of_clusters)]
+        return matrix_u[np.random.choice(num_of_rows * num_of_cols, num_of_clusters)]
     else:
         # k-means++ strategy
+        # Construct indices of a grid
+        grid = np.indices((num_of_rows, num_of_cols))
+        row_indices = grid[0]
+        col_indices = grid[1]
+
+        # Construct indices vector
+        indices = np.hstack((row_indices.reshape(-1, 1), col_indices.reshape(-1, 1)))
+
         # Randomly pick first center
-        centers = [matrix_u[np.random.choice(num_of_points, 1)].tolist()]
+        num_of_points = num_of_rows * num_of_cols
+        centers = [indices[np.random.choice(num_of_points, 1)[0]].tolist()]
 
         # Find remaining centers
         for _ in range(num_of_clusters - 1):
             # Compute minimum distance for each point from all found centers
             distance = np.zeros(num_of_points)
-            for p in range(num_of_points):
+            for idx, point in enumerate(indices):
                 min_distance = np.Inf
                 for cen in centers:
-                    dist = np.linalg.norm(matrix_u[p, :] - cen)
+                    dist = np.linalg.norm(point - cen)
                     min_distance = dist if dist < min_distance else min_distance
-                distance[p] = min_distance
-            # Square the distance and divide it by its sum to get probability
-            distance = np.power(distance, 2)
+                distance[idx] = min_distance
+            # Divide the distance by its sum to get probability
             distance /= np.sum(distance)
             # Get a new center
-            centers.append(matrix_u[np.random.choice(num_of_points, 1, p=distance)[0]].tolist())
+            centers.append(indices[np.random.choice(num_of_points, 1, p=distance)[0]].tolist())
+
+        # Change from index to feature index
+        for idx, cen in enumerate(centers):
+            centers[idx] = matrix_u[cen[0] * num_of_rows + cen[1], :]
 
         return np.array(centers)
 
@@ -130,27 +135,26 @@ def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: n
         colors = np.append(colors, np.random.choice(256, (num_of_clusters - 3, 3)), axis=0)
 
     # List storing images of clustering state
+    num_of_points = num_of_rows*num_of_cols
     img = []
 
     # K-means
-    current_cluster = np.zeros(num_of_rows * num_of_cols)
+    current_cluster = np.random.choice(num_of_clusters, num_of_points)
     current_centers = centers.copy()
     count = 0
     iteration = 100
     while True:
-        sys.stdout.write('\r')
-        sys.stdout.write(
-            f'[\033[96mINFO\033[00m] progress: [{"=" * int(20.0 * count / iteration):20}] {count}/{iteration}')
-        sys.stdout.flush()
+        # Display progress
+        # progress_log(count, iteration)
+        print(current_centers)
 
         # Get new cluster
-        new_cluster = kmeans_clustering(num_of_rows * num_of_cols, num_of_rows, num_of_clusters, matrix_u,
-                                        current_centers)
+        new_cluster = kmeans_clustering(num_of_points, num_of_clusters, matrix_u, current_centers)
 
         # Capture new state
         img.append(capture_current_state(num_of_rows, num_of_cols, new_cluster, colors))
 
-        if (np.linalg.norm((new_cluster - current_cluster), ord=2) < 0.0001 or count >= iteration) and count > 1:
+        if np.linalg.norm((new_cluster - current_cluster), ord=2) < 0.001 or count >= iteration:
             break
 
         # Update current parameters
@@ -160,19 +164,26 @@ def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: n
 
     # Save gif
     print()
-    filename = f'./output/spectral_clustering/spectral_clustering_{index}_cluster{num_of_clusters}_{"random" if not mode else "kmeans++"}.gif'
+    filename = f'./output/spectral_clustering/spectral_clustering_{index}_' \
+               f'cluster{num_of_clusters}_' \
+               f'{"kmeans++" if mode else "random"}_' \
+               f'{"normalized" if cut else "ratio"}.gif'
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=100)
+    '''if len(img) > 1:
+        img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=100)
+    else:
+        img[0].save(filename)'''
+    for idx, image in enumerate(img):
+        image.save(f'./output/spectral_clustering/{index}_{idx}.png')
 
 
-def kmeans_clustering(num_of_points: int, num_of_rows: int, num_of_clusters: int, kernel: np.ndarray,
+def kmeans_clustering(num_of_points: int, num_of_clusters: int, matrix_u: np.ndarray,
                       centers: np.ndarray) -> np.ndarray:
     """
     Classify data points into clusters
     :param num_of_points: number of data points
-    :param num_of_rows: number of rows
     :param num_of_clusters: number of clusters
-    :param kernel: kernel
+    :param matrix_u: matrix U containing eigenvectors
     :param centers: current centers
     :return: cluster of each data point
     """
@@ -180,29 +191,42 @@ def kmeans_clustering(num_of_points: int, num_of_rows: int, num_of_clusters: int
     for p in range(num_of_points):
         # Find minimum distance from data point to centers
         distance = np.zeros(num_of_clusters)
-        for c in range(num_of_clusters):
-            distance[c] = np.linalg.norm((kernel[p] - centers[c]), ord=2)
+        for idx, cen in enumerate(centers):
+            distance[idx] = np.linalg.norm((matrix_u[p] - cen), ord=2)
         # Classify data point into cluster according to the closest center
         new_cluster[p] = np.argmin(distance)
 
     return new_cluster
 
 
-def kmeans_recompute_centers(num_of_clusters: int, kernel: np.ndarray, current_cluster: np.ndarray) -> np.ndarray:
+def kmeans_recompute_centers(num_of_clusters: int, matrix_u: np.ndarray, current_cluster: np.ndarray) -> np.ndarray:
     """
     Recompute centers according to current cluster
     :param num_of_clusters: number of clusters
-    :param kernel: kernel
+    :param matrix_u: matrix U containing eigenvectors
     :param current_cluster: current cluster
     :return: new centers
     """
-    new_centers = np.zeros(num_of_clusters)
+    new_centers = []
     for c in range(num_of_clusters):
-        points_in_c = kernel[current_cluster == c]
-        new_center = np.sum(points_in_c, axis=0) / len(points_in_c)
-        new_centers[c] = new_center
+        points_in_c = matrix_u[current_cluster == c]
+        new_center = np.average(points_in_c, axis=0)
+        new_centers.append(new_center)
 
-    return new_centers
+    return np.array(new_centers)
+
+
+def progress_log(count: int, iteration: int) -> None:
+    """
+    Print progress
+    :param count: current iteration
+    :param iteration: total iteration
+    :return: None
+    """
+    sys.stdout.write('\r')
+    sys.stdout.write(f'[\033[96mPROGRESS\033[00m] progress: '
+                     f'[{"=" * int(20.0 * count / iteration):20}] {count}/{iteration}')
+    sys.stdout.flush()
 
 
 def info_log(log: str) -> None:
@@ -290,18 +314,28 @@ if __name__ == '__main__':
 
     # Read images
     info_log('=== Read images ===')
-    images = [Image.open(i1), Image.open(i2)]
+    images = [Image.open(i1)]
 
     # Convert image into numpy array
     info_log('=== Convert images into numpy array ===')
     images[0] = np.asarray(images[0])
-    images[1] = np.asarray(images[1])
+    # images[1] = np.asarray(images[1])
 
-    # Compute kernel
-    info_log('=== Calculate gram matrix ===')
-    rows, columns, _ = images[0].shape
-    gram_matrix = compute_kernel(images[0], gammas, gammac)
+    for i, im in enumerate(images):
+        # Compute kernel
+        info_log('=== Calculate gram matrix ===')
+        rows, columns, _ = im.shape
+        gram_matrix = compute_kernel(im, gammas, gammac)
 
-    # Spectral clustering
-    info_log('=== Spectral clustering ===')
-    spectral_clustering(rows, columns, gram_matrix, cu, clu, m, 0)
+        # Get matrix U containing eigenvectors
+        info_log('=== Calculate matrix U ===')
+        m_u = compute_matrix_u(gram_matrix, cu, clu)
+        if cu:
+            # Normalized cut
+            sum_of_each_row = np.sum(m_u, axis=1)
+            for j in range(len(m_u)):
+                m_u[j, :] /= sum_of_each_row[j]
+
+        # Spectral clustering
+        info_log('=== Spectral clustering ===')
+        spectral_clustering(rows, columns, clu, m_u, m, cu, i)

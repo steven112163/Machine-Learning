@@ -34,10 +34,8 @@ def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, clus
     count = 0
     iteration = 100
     while True:
-        sys.stdout.write('\r')
-        sys.stdout.write(
-            f'[\033[96mINFO\033[00m] progress: [{"=" * int(20.0 * count / iteration):20}] {count}/{iteration}')
-        sys.stdout.flush()
+        # Display progress
+        progress_log(count, iteration)
 
         # Get new cluster
         new_cluster = kernel_clustering(num_of_rows * num_of_cols, num_of_clusters, kernel, current_cluster)
@@ -45,7 +43,7 @@ def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, clus
         # Capture new state
         img.append(capture_current_state(num_of_rows, num_of_cols, new_cluster, colors))
 
-        if np.linalg.norm((new_cluster - current_cluster), ord=2) < 0.0001 or count >= iteration:
+        if np.linalg.norm((new_cluster - current_cluster), ord=2) < 0.001 or count >= iteration:
             break
 
         current_cluster = new_cluster.copy()
@@ -53,7 +51,9 @@ def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, clus
 
     # Save gif
     print()
-    filename = f'./output/kernel_kmeans/kernel_kmeans_{index}_cluster{num_of_clusters}_{"random" if not mode else "kmeans++"}.gif'
+    filename = f'./output/kernel_kmeans/kernel_kmeans_{index}_' \
+               f'cluster{num_of_clusters}_' \
+               f'{"kmeans++" if mode else "random"}.gif'
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=100)
 
@@ -199,8 +199,7 @@ def choose_center(num_of_rows: int, num_of_cols: int, num_of_clusters: int, mode
                     dist = np.linalg.norm(point - cen)
                     min_distance = dist if dist < min_distance else min_distance
                 distance[idx] = min_distance
-            # Square the distance and divide it by its sum to get probability
-            distance = np.power(distance, 2)
+            # Divide the distance by its sum to get probability
             distance /= np.sum(distance)
             # Get a new center
             centers.append(indices[np.random.choice(num_of_points, 1, p=distance)[0]].tolist())
@@ -235,6 +234,19 @@ def compute_kernel(image: np.ndarray, gamma_s: float, gamma_c: float) -> np.ndar
     spatial_distance = cdist(indices, indices, 'sqeuclidean')
 
     return np.multiply(np.exp(-gamma_s * spatial_distance), np.exp(-gamma_c * color_distance))
+
+
+def progress_log(count: int, iteration: int) -> None:
+    """
+    Print progress
+    :param count: current iteration
+    :param iteration: total iteration
+    :return: None
+    """
+    sys.stdout.write('\r')
+    sys.stdout.write(f'[\033[96mPROGRESS\033[00m] progress: '
+                     f'[{"=" * int(20.0 * count / iteration):20}] {count}/{iteration}')
+    sys.stdout.flush()
 
 
 def info_log(log: str) -> None:

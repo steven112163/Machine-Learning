@@ -4,7 +4,6 @@ import os
 import numpy as np
 from PIL import Image
 from scipy.spatial.distance import cdist
-from typing import List
 
 
 def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, cluster: np.ndarray, kernel: np.ndarray,
@@ -135,28 +134,28 @@ def capture_current_state(num_of_rows: int, num_of_cols: int, cluster: np.ndarra
     return Image.fromarray(np.uint8(state))
 
 
-def initial_clustering(num_of_row: int, num_of_col: int, num_of_clusters: int, kernel: np.ndarray,
+def initial_clustering(num_of_rows: int, num_of_cols: int, num_of_clusters: int, kernel: np.ndarray,
                        mode: int) -> np.ndarray:
     """
     Initialization for kernel k-means
-    :param: num_of_row: number of rows in the image
-    :param: num_of_col: number of columns in the image
+    :param: num_of_rows: number of rows in the image
+    :param: num_of_cols: number of columns in the image
     :param: num_of_clusters: number of clusters
     :param: kernel: kernel
     :param: mode: strategy for choosing centers
     :return: clusters
     """
     # Get initial centers
-    centers = choose_center(num_of_row, num_of_col, num_of_clusters, mode)
+    centers = choose_center(num_of_rows, num_of_cols, num_of_clusters, mode)
 
     # k-means
-    num_of_points = num_of_row * num_of_col
+    num_of_points = num_of_rows * num_of_cols
     cluster = np.zeros(num_of_points, dtype=int)
     for p in range(num_of_points):
         # Compute the distance of every point to all centers
         distance = np.zeros(num_of_clusters)
         for idx, cen in enumerate(centers):
-            seq_of_cen = cen[0] * num_of_row + cen[1]
+            seq_of_cen = cen[0] * num_of_rows + cen[1]
             distance[idx] = kernel[p, p] + kernel[seq_of_cen, seq_of_cen] - 2 * kernel[p, seq_of_cen]
         # Pick the index of minimum distance as the cluster of the point
         cluster[p] = np.argmin(distance)
@@ -164,11 +163,11 @@ def initial_clustering(num_of_row: int, num_of_col: int, num_of_clusters: int, k
     return cluster
 
 
-def choose_center(num_of_row: int, num_of_col: int, num_of_clusters: int, mode: int) -> np.ndarray:
+def choose_center(num_of_rows: int, num_of_cols: int, num_of_clusters: int, mode: int) -> np.ndarray:
     """
     Choose centers for initial clustering
-    :param: num_of_row: number of rows in the image
-    :param: num_of_col: number of columns in the image
+    :param: num_of_rows: number of rows in the image
+    :param: num_of_cols: number of columns in the image
     :param: num_of_clusters: number of clusters
     :param: mode: strategy for choosing centers
     :return: list of indices of clusters' center
@@ -179,7 +178,7 @@ def choose_center(num_of_row: int, num_of_col: int, num_of_clusters: int, mode: 
     else:
         # k-means++ strategy
         # Construct indices of a grid
-        grid = np.indices((num_of_row, num_of_col))
+        grid = np.indices((num_of_rows, num_of_cols))
         row_indices = grid[0]
         col_indices = grid[1]
 
@@ -187,7 +186,7 @@ def choose_center(num_of_row: int, num_of_col: int, num_of_clusters: int, mode: 
         indices = np.hstack((row_indices.reshape(-1, 1), col_indices.reshape(-1, 1)))
 
         # Randomly pick first center
-        num_of_points = num_of_row * num_of_col
+        num_of_points = num_of_rows * num_of_cols
         centers = [indices[np.random.choice(num_of_points, 1)[0]].tolist()]
 
         # Find remaining centers

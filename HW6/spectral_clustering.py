@@ -1,9 +1,41 @@
 import argparse
 import sys
 import numpy as np
+import os
 from PIL import Image
-from kernel_kmeans import capture_current_state, compute_kernel, initial_clustering
+from kernel_kmeans import capture_current_state, compute_kernel, choose_center
 from numba import jit
+
+
+def spectral_clustering(num_of_row: int, num_of_col: int, kernel: np.ndarray, cut: int, num_of_cluster: int,
+                        mode: int, index: int) -> None:
+    """
+    Spectral clustering
+    :param num_of_row: number of rows
+    :param num_of_col: number of columns
+    :param kernel: kernel
+    :param cut: cut type
+    :param num_of_cluster: number of clusters
+    :param mode: strategy for choosing centers
+    :param index: index of the images
+    :return: None
+    """
+    # Get matrix U containing eigenvectors
+    info_log('=== Calculate matrix U ===')
+    matrix_u = compute_matrix_u(kernel, cut, num_of_cluster)
+    if cut:
+        # Normalized cut
+        sum_of_each_row = np.sum(matrix_u, axis=1)
+        for idx in range(len(matrix_u)):
+            matrix_u[idx, :] /= sum_of_each_row[idx]
+
+    # Find initial centers
+    info_log('=== Find initial centers of each cluster ===')
+    centers = choose_center(num_of_row, num_of_col, num_of_cluster, mode)
+
+    # K-means
+    info_log('=== K-means ===')
+    kmeans(num_of_row, num_of_col, num_of_cluster, kernel, centers, index, mode, cut)
 
 
 @jit
@@ -38,6 +70,70 @@ def compute_matrix_u(matrix_w: np.ndarray, cut: int, num_of_cluster: int) -> np.
     sort_idx = sort_idx[eigenvalues[sort_idx] > 0]
 
     return eigenvectors[sort_idx[:num_of_cluster]].T
+
+
+def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, kernel: np.ndarray, centers: np.ndarray,
+           index: int, mode: int, cut: int) -> None:
+    """
+    K-means
+    :param num_of_rows: number of rows
+    :param num_of_cols: number of columns
+    :param num_of_clusters: number of clusters
+    :param kernel: kernel
+    :param centers: initial centers
+    :param index: index of the images
+    :param mode: strategy for choosing centers
+    :param cut: cut type
+    :return: None
+    """
+    # Colors
+    colors = np.array([[255, 0, 0],
+                       [0, 255, 0],
+                       [0, 0, 255]])
+    if num_of_clusters > 3:
+        colors = np.append(colors, np.random.choice(256, (num_of_clusters - 3, 3)), axis=0)
+
+    # List storing images of clustering state
+    img = []
+
+    # Construct indices of a grid
+    grid = np.indices((num_of_rows, num_of_cols))
+    row_indices = grid[0]
+    col_indices = grid[1]
+
+    # Construct indices vector
+    indices = np.hstack((row_indices.reshape(-1, 1), col_indices.reshape(-1, 1)))
+
+    # Kernel k-means
+    current_cluster = np.zeros(num_of_rows * num_of_cols)
+    current_centers = centers.copy()
+    count = 0
+    iteration = 100
+    while True:
+        sys.stdout.write('\r')
+        sys.stdout.write(
+            f'[\033[96mINFO\033[00m] progress: [{"=" * int(20.0 * count / iteration):20}] {count}/{iteration}')
+        sys.stdout.flush()
+
+        # Get new cluster
+        new_cluster = kmeans_clustering(num_of_rows * num_of_cols, num_of_clusters, kernel, current_centers)
+
+        # Capture new state
+        img.append(capture_current_state(num_of_rows, num_of_cols, new_cluster, colors))
+
+        if (np.linalg.norm((new_cluster - current_cluster), ord=2) < 0.0001 or count >= iteration) and count > 1:
+            break
+
+        # Update current parameters
+        current_cluster = new_cluster.copy()
+        current_centers = kmeans_recompute_centers(num_of_clusters, kernel, current_cluster, current_centers, indices)
+        count += 1
+
+    # Save gif
+    print()
+    filename = f'./output/spectral_clustering/spectral_clustering_{index}_cluster{num_of_clusters}_{"random" if not mode else "kmeans++"}.gif'
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=100)
 
 
 def info_log(log: str) -> None:
@@ -134,12 +230,9 @@ if __name__ == '__main__':
 
     # Compute kernel
     info_log('=== Calculate gram matrix ===')
+    rows, columns, _ = images[0].shape
     gram_matrix = compute_kernel(images[0], gammas, gammac)
 
-    # Get matrix U containing eigenvectors
-    info_log('=== Calculate matrix U ===')
-    m_u = compute_matrix_u(gram_matrix, cu, clu)
-    print(m_u.shape)
-
     # Spectral clustering
-    ro, co, _ = images[0].shape
+    info_log('=== Spectral clustering ===')
+    spectral_clustering(rows, columns, gram_matrix, cu, clu, m, 0)

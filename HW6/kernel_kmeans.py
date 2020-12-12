@@ -7,27 +7,25 @@ from scipy.spatial.distance import cdist
 from typing import List
 
 
-def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_cluster: int, cluster: np.ndarray, kernel: np.ndarray,
+def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, cluster: np.ndarray, kernel: np.ndarray,
                   mode: int, index: int) -> None:
     """
     Kernel K-means
     :param num_of_rows: number of rows
     :param num_of_cols: number of columns
-    :param num_of_cluster: number of clusters
+    :param num_of_clusters: number of clusters
     :param cluster: clusters from initial clustering
     :param kernel: kernel
     :param mode: strategy for choosing centers
-    :param index: index of the image
+    :param index: index of the images
     :return: None
     """
-    info_log('=== Kernel K-means ===')
-
     # Colors
     colors = np.array([[255, 0, 0],
                        [0, 255, 0],
                        [0, 0, 255]])
-    if num_of_cluster > 3:
-        colors = np.append(colors, np.random.choice(256, (num_of_cluster - 3, 3)), axis=0)
+    if num_of_clusters > 3:
+        colors = np.append(colors, np.random.choice(256, (num_of_clusters - 3, 3)), axis=0)
 
     # List storing images of clustering state
     img = [capture_current_state(num_of_rows, num_of_cols, cluster, colors)]
@@ -43,7 +41,7 @@ def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_cluster: int, clust
         sys.stdout.flush()
 
         # Get new cluster
-        new_cluster = kernel_clustering(num_of_rows * num_of_cols, num_of_cluster, kernel, current_cluster)
+        new_cluster = kernel_clustering(num_of_rows * num_of_cols, num_of_clusters, kernel, current_cluster)
 
         # Capture new state
         img.append(capture_current_state(num_of_rows, num_of_cols, new_cluster, colors))
@@ -56,30 +54,30 @@ def kernel_kmeans(num_of_rows: int, num_of_cols: int, num_of_cluster: int, clust
 
     # Save gif
     print()
-    filename = f'./output/kernel_kmeans_{index}_cluster{num_of_cluster}_{"random" if not mode else "kmeans++"}.gif'
+    filename = f'./output/kernel_kmeans/kernel_kmeans_{index}_cluster{num_of_clusters}_{"random" if not mode else "kmeans++"}.gif'
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=100)
 
 
-def kernel_clustering(num_of_points: int, num_of_cluster: int, kernel: np.ndarray, cluster: np.ndarray) -> np.ndarray:
+def kernel_clustering(num_of_points: int, num_of_clusters: int, kernel: np.ndarray, cluster: np.ndarray) -> np.ndarray:
     """
     Kernel k-means clustering
     :param num_of_points: number of data points in the image
-    :param num_of_cluster: number of clusters
+    :param num_of_clusters: number of clusters
     :param kernel: kernel
     :param cluster: current cluster
     :return: new cluster
     """
     # Get number of members in each cluster
-    num_of_members = np.array([np.sum(np.where(cluster == c, 1, 0)) for c in range(num_of_cluster)])
+    num_of_members = np.array([np.sum(np.where(cluster == c, 1, 0)) for c in range(num_of_clusters)])
 
     # Get sum of pairwise kernel distances of each cluster
-    pairwise = get_sum_of_pairwise_distance(num_of_points, num_of_cluster, num_of_members, kernel, cluster)
+    pairwise = get_sum_of_pairwise_distance(num_of_points, num_of_clusters, num_of_members, kernel, cluster)
 
     new_cluster = np.zeros(num_of_points, dtype=int)
     for p in range(num_of_points):
-        distance = np.zeros(num_of_cluster)
-        for c in range(num_of_cluster):
+        distance = np.zeros(num_of_clusters)
+        for c in range(num_of_clusters):
             distance[c] += kernel[p, p] + pairwise[c]
 
             # Get distance from given data point to others in the target cluster
@@ -90,19 +88,19 @@ def kernel_clustering(num_of_points: int, num_of_cluster: int, kernel: np.ndarra
     return new_cluster
 
 
-def get_sum_of_pairwise_distance(num_of_points: int, num_of_cluster: int, num_of_members: np.ndarray,
+def get_sum_of_pairwise_distance(num_of_points: int, num_of_clusters: int, num_of_members: np.ndarray,
                                  kernel: np.ndarray, cluster: np.ndarray) -> np.ndarray:
     """
     Get sum of pairwise kernel distances of each cluster
     :param num_of_points: number of data points in the image
-    :param num_of_cluster: number of clusters
+    :param num_of_clusters: number of clusters
     :param num_of_members: number of members in each cluster
     :param kernel: kernel
     :param cluster: current cluster
     :return: sum of pairwise kernel distances of each cluster
     """
-    pairwise = np.zeros(num_of_cluster)
-    for c in range(num_of_cluster):
+    pairwise = np.zeros(num_of_clusters)
+    for c in range(num_of_clusters):
         tmp_kernel = kernel.copy()
         for p in range(num_of_points):
             # Set distance to 0 if the point doesn't belong to the cluster
@@ -137,26 +135,26 @@ def capture_current_state(num_of_rows: int, num_of_cols: int, cluster: np.ndarra
     return Image.fromarray(np.uint8(state))
 
 
-def initial_clustering(num_of_row: int, num_of_col: int, num_of_cluster: int, kernel: np.ndarray,
+def initial_clustering(num_of_row: int, num_of_col: int, num_of_clusters: int, kernel: np.ndarray,
                        mode: int) -> np.ndarray:
     """
     Initialization for kernel k-means
     :param: num_of_row: number of rows in the image
     :param: num_of_col: number of columns in the image
-    :param: num_of_cluster: number of clusters
+    :param: num_of_clusters: number of clusters
     :param: kernel: kernel
     :param: mode: strategy for choosing centers
     :return: clusters
     """
     # Get initial centers
-    centers = choose_center(num_of_row, num_of_col, num_of_cluster, mode)
+    centers = choose_center(num_of_row, num_of_col, num_of_clusters, mode)
 
     # k-means
     num_of_points = num_of_row * num_of_col
     cluster = np.zeros(num_of_points, dtype=int)
     for p in range(num_of_points):
         # Compute the distance of every point to all centers
-        distance = np.zeros(num_of_cluster)
+        distance = np.zeros(num_of_clusters)
         for idx, cen in enumerate(centers):
             seq_of_cen = cen[0] * num_of_row + cen[1]
             distance[idx] = kernel[p, p] + kernel[seq_of_cen, seq_of_cen] - 2 * kernel[p, seq_of_cen]
@@ -166,18 +164,18 @@ def initial_clustering(num_of_row: int, num_of_col: int, num_of_cluster: int, ke
     return cluster
 
 
-def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: int) -> List[List[int]]:
+def choose_center(num_of_row: int, num_of_col: int, num_of_clusters: int, mode: int) -> np.ndarray:
     """
     Choose centers for initial clustering
     :param: num_of_row: number of rows in the image
     :param: num_of_col: number of columns in the image
-    :param: num_of_cluster: number of clusters
+    :param: num_of_clusters: number of clusters
     :param: mode: strategy for choosing centers
     :return: list of indices of clusters' center
     """
     if not mode:
         # Random strategy
-        return np.random.choice(100, (num_of_cluster, 2)).tolist()
+        return np.random.choice(100, (num_of_clusters, 2))
     else:
         # k-means++ strategy
         # Construct indices of a grid
@@ -193,7 +191,7 @@ def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: i
         centers = [indices[np.random.choice(num_of_points, 1)[0]].tolist()]
 
         # Find remaining centers
-        for _ in range(num_of_cluster - 1):
+        for _ in range(num_of_clusters - 1):
             # Compute minimum distance for each point from all found centers
             distance = np.zeros(num_of_points)
             for idx, point in enumerate(indices):
@@ -208,7 +206,7 @@ def choose_center(num_of_row: int, num_of_col: int, num_of_cluster: int, mode: i
             # Get a new center
             centers.append(indices[np.random.choice(num_of_points, 1, p=distance)[0]].tolist())
 
-        return centers
+        return np.array(centers)
 
 
 def compute_kernel(image: np.ndarray, gamma_s: float, gamma_c: float) -> np.ndarray:
@@ -329,17 +327,18 @@ if __name__ == '__main__':
     images[0] = np.asarray(images[0])
     images[1] = np.asarray(images[1])
 
-    for i, img in enumerate(images):
-        info_log(f'=== Image {i} ===')
+    for i, im in enumerate(images):
+        info_log(f'=== Image {i} {"random" if not m else "kmeans++"} ===')
 
         # Compute kernel
         info_log('=== Calculate gram matrix ===')
-        gram_matrix = compute_kernel(img, gammas, gammac)
+        gram_matrix = compute_kernel(im, gammas, gammac)
 
         # Initial clustering
-        rows, columns, _ = img.shape
+        rows, columns, _ = im.shape
         info_log('=== Perform initial clustering ===')
         clusters = initial_clustering(rows, columns, clu, gram_matrix, m)
 
         # Start kernel k-means
+        info_log('=== Kernel K-means ===')
         kernel_kmeans(rows, columns, clu, clusters, gram_matrix, m, i)

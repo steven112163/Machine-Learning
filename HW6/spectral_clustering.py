@@ -4,7 +4,6 @@ import numpy as np
 import os
 from PIL import Image
 from kernel_kmeans import capture_current_state, compute_kernel
-from numba import jit
 
 
 def spectral_clustering(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: np.ndarray, mode: int,
@@ -29,7 +28,6 @@ def spectral_clustering(num_of_rows: int, num_of_cols: int, num_of_clusters: int
     kmeans(num_of_rows, num_of_cols, num_of_clusters, matrix_u, centers, index, mode, cut)
 
 
-@jit
 def compute_matrix_u(matrix_w: np.ndarray, cut: int, num_of_clusters: int) -> np.ndarray:
     """
     Compute matrix U containing eigenvectors
@@ -155,7 +153,7 @@ def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: n
         # Capture new state
         img.append(capture_current_state(num_of_rows, num_of_cols, new_cluster, colors))
 
-        if np.linalg.norm((new_centers - current_centers), ord=2) < 0.001 or count >= iteration:
+        if np.linalg.norm((new_centers - current_centers), ord=2) < 0.01 or count >= iteration:
             break
 
         # Update current parameters

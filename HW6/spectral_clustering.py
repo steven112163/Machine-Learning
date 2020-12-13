@@ -135,31 +135,31 @@ def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: n
         colors = np.append(colors, np.random.choice(256, (num_of_clusters - 3, 3)), axis=0)
 
     # List storing images of clustering state
-    num_of_points = num_of_rows*num_of_cols
+    num_of_points = num_of_rows * num_of_cols
     img = []
 
     # K-means
-    current_cluster = np.random.choice(num_of_clusters, num_of_points)
     current_centers = centers.copy()
     count = 0
     iteration = 100
     while True:
         # Display progress
-        # progress_log(count, iteration)
-        print(current_centers)
+        progress_log(count, iteration)
 
         # Get new cluster
         new_cluster = kmeans_clustering(num_of_points, num_of_clusters, matrix_u, current_centers)
 
+        # Get new centers
+        new_centers = kmeans_recompute_centers(num_of_clusters, matrix_u, new_cluster)
+
         # Capture new state
         img.append(capture_current_state(num_of_rows, num_of_cols, new_cluster, colors))
 
-        if np.linalg.norm((new_cluster - current_cluster), ord=2) < 0.001 or count >= iteration:
+        if np.linalg.norm((new_centers - current_centers), ord=2) < 0.001 or count >= iteration:
             break
 
         # Update current parameters
-        current_cluster = new_cluster.copy()
-        current_centers = kmeans_recompute_centers(num_of_clusters, matrix_u, current_cluster)
+        current_centers = new_centers.copy()
         count += 1
 
     # Save gif
@@ -169,12 +169,10 @@ def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: n
                f'{"kmeans++" if mode else "random"}_' \
                f'{"normalized" if cut else "ratio"}.gif'
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    '''if len(img) > 1:
+    if len(img) > 1:
         img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=100)
     else:
-        img[0].save(filename)'''
-    for idx, image in enumerate(img):
-        image.save(f'./output/spectral_clustering/{index}_{idx}.png')
+        img[0].save(filename)
 
 
 def kmeans_clustering(num_of_points: int, num_of_clusters: int, matrix_u: np.ndarray,
@@ -314,14 +312,16 @@ if __name__ == '__main__':
 
     # Read images
     info_log('=== Read images ===')
-    images = [Image.open(i1)]
+    images = [Image.open(i1), Image.open(i2)]
 
     # Convert image into numpy array
     info_log('=== Convert images into numpy array ===')
     images[0] = np.asarray(images[0])
-    # images[1] = np.asarray(images[1])
+    images[1] = np.asarray(images[1])
 
     for i, im in enumerate(images):
+        info_log(f'=== Image {i} {"normalized" if cu else "ratio"} {"kmeans++" if m else "random"} ===')
+
         # Compute kernel
         info_log('=== Calculate gram matrix ===')
         rows, columns, _ = im.shape

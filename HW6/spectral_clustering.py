@@ -2,6 +2,7 @@ import argparse
 import sys
 import numpy as np
 import os
+import matplotlib.pyplot as plt
 from PIL import Image
 from kernel_kmeans import capture_current_state, compute_kernel
 
@@ -25,7 +26,11 @@ def spectral_clustering(num_of_rows: int, num_of_cols: int, num_of_clusters: int
 
     # K-means
     info_log('=== K-means ===')
-    kmeans(num_of_rows, num_of_cols, num_of_clusters, matrix_u, centers, index, mode, cut)
+    clusters = kmeans(num_of_rows, num_of_cols, num_of_clusters, matrix_u, centers, index, mode, cut)
+
+    # Plot data points in eigenspace if number of clusters is 2
+    if num_of_clusters == 2:
+        plot_the_result(matrix_u, clusters, index, mode, cut)
 
 
 def compute_matrix_u(matrix_w: np.ndarray, cut: int, num_of_clusters: int) -> np.ndarray:
@@ -112,7 +117,7 @@ def initial_centers(num_of_rows: int, num_of_cols: int, num_of_clusters: int, ma
 
 
 def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: np.ndarray, centers: np.ndarray,
-           index: int, mode: int, cut: int) -> None:
+           index: int, mode: int, cut: int) -> np.ndarray:
     """
     K-means
     :param num_of_rows: number of rows
@@ -123,7 +128,7 @@ def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: n
     :param index: index of the images
     :param mode: strategy for choosing centers
     :param cut: cut type
-    :return: None
+    :return: cluster result
     """
     # Colors
     colors = np.array([[255, 0, 0],
@@ -138,6 +143,7 @@ def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: n
 
     # K-means
     current_centers = centers.copy()
+    new_cluster = np.zeros(num_of_points, dtype=int)
     count = 0
     iteration = 100
     while True:
@@ -171,6 +177,8 @@ def kmeans(num_of_rows: int, num_of_cols: int, num_of_clusters: int, matrix_u: n
         img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=100)
     else:
         img[0].save(filename)
+
+    return new_cluster
 
 
 def kmeans_clustering(num_of_points: int, num_of_clusters: int, matrix_u: np.ndarray,
@@ -210,6 +218,30 @@ def kmeans_recompute_centers(num_of_clusters: int, matrix_u: np.ndarray, current
         new_centers.append(new_center)
 
     return np.array(new_centers)
+
+
+def plot_the_result(matrix_u: np.ndarray, clusters: np.ndarray, index: int, mode: int, cut: int) -> None:
+    """
+    Plot data points in the eigenspace
+    :param matrix_u: matrix U containing eigenvectors
+    :param clusters: cluster result
+    :param index: index of the image
+    :param mode: strategy for choosing centers
+    :param cut: cut type
+    :return: None
+    """
+    colors = ['r', 'b']
+    plt.clf()
+
+    for idx, point in enumerate(matrix_u):
+        plt.scatter(point[0], point[1], c=colors[clusters[idx]])
+
+    # Save the figure
+    filename = f'./output/spectral_clustering/eigenspace_{index}_' \
+               f'{"kmeans++" if mode else "random"}_' \
+               f'{"normalized" if cut else "ratio"}.png'
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    plt.savefig(filename)
 
 
 def progress_log(count: int, iteration: int) -> None:
@@ -279,8 +311,8 @@ def parse_arguments():
     parser.add_argument('-ione', '--image1', help='First image filename', default='data/image1.png')
     parser.add_argument('-itwo', '--image2', help='Second image filename', default='data/image2.png')
     parser.add_argument('-clu', '--cluster', help='Number of clusters', default=2, type=check_cluster_range)
-    parser.add_argument('-gs', '--gammas', help='Parameter gamma_s in the kernel', default=0.001, type=float)
-    parser.add_argument('-gc', '--gammac', help='Parameter gamma_c in the kernel', default=0.01, type=float)
+    parser.add_argument('-gs', '--gammas', help='Parameter gamma_s in the kernel', default=0.0001, type=float)
+    parser.add_argument('-gc', '--gammac', help='Parameter gamma_c in the kernel', default=0.001, type=float)
     parser.add_argument('-cu', '--cut', help='Type for cut, 0: ratio cut, 1: normalized cut', default=0,
                         type=check_int_range)
     parser.add_argument('-m', '--mode',
@@ -318,7 +350,7 @@ if __name__ == '__main__':
     images[1] = np.asarray(images[1])
 
     for i, im in enumerate(images):
-        info_log(f'=== Image {i} {"normalized" if cu else "ratio"} {"kmeans++" if m else "random"} ===')
+        info_log(f'=== Image {i} {"kmeans++" if m else "random"} {"normalized" if cu else "ratio"} ===')
 
         # Compute kernel
         info_log('=== Calculate gram matrix ===')

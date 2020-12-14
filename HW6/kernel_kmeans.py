@@ -303,8 +303,8 @@ def parse_arguments():
     parser.add_argument('-ione', '--image1', help='First image filename', default='data/image1.png')
     parser.add_argument('-itwo', '--image2', help='Second image filename', default='data/image2.png')
     parser.add_argument('-clu', '--cluster', help='Number of clusters', default=3, type=check_cluster_range)
-    parser.add_argument('-gs', '--gammas', help='Parameter gamma_s in the kernel', default=0.001, type=float)
-    parser.add_argument('-gc', '--gammac', help='Parameter gamma_c in the kernel', default=0.01, type=float)
+    parser.add_argument('-gs', '--gammas', help='Parameter gamma_s in the kernel', default=0.0001, type=float)
+    parser.add_argument('-gc', '--gammac', help='Parameter gamma_c in the kernel', default=0.001, type=float)
     parser.add_argument('-m', '--mode',
                         help='Mode for initial clustering, 0: randomly initialized centers, 1: kmeans++', default=0,
                         type=check_int_range)

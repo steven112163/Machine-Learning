@@ -8,7 +8,8 @@ from scipy.spatial.distance import cdist
 
 
 def principal_components_analysis(training_images: np.ndarray, training_labels: np.ndarray, testing_images: np.ndarray,
-                                  testing_labels: np.ndarray, mode: int, k_neighbors: int) -> None:
+                                  testing_labels: np.ndarray, mode: int, k_neighbors: int, kernel_type: int,
+                                  gamma: float) -> None:
     """
     Principal components analysis
     :param training_images: training images
@@ -17,6 +18,8 @@ def principal_components_analysis(training_images: np.ndarray, training_labels: 
     :param testing_labels: testing labels
     :param mode: 0: simple, 1: kernel
     :param k_neighbors: number of nearest neighbors to decide classification
+    :param kernel_type: 0 for linear, 1 for RBF
+    :param gamma: gamma of RBF
     :return: None
     """
     # Get number of images
@@ -28,7 +31,10 @@ def principal_components_analysis(training_images: np.ndarray, training_labels: 
         matrix = simple_pca(num_of_training, training_images)
     else:
         # Kernel PCA
-        info_log('=== Kernel PCA ===')
+        info_log(f'=== {"RBF" if kernel_type else "Linear"} kernel PCA ===')
+        kernel = kernel_pca(training_images, kernel_type, gamma)
+        matrix_n = np.ones((107 * 97, 107 * 97), dtype=float) / (107 * 97)
+        matrix = kernel - matrix_n.dot(kernel) - kernel.dot(matrix_n) + matrix_n.dot(kernel).dot(matrix_n)
 
     # Compute eigenvalues and eigenvectors
     info_log('=== Calculate eigenvalues and eigenvectors ===')
@@ -107,6 +113,25 @@ def simple_pca(num_of_images: int, training_images: np.ndarray) -> np.ndarray:
     return covariance
 
 
+def kernel_pca(training_images: np.ndarray, kernel_type: int, gamma: float) -> np.ndarray:
+    """
+    Kernel PCA
+    :param training_images: training images
+    :param kernel_type: 0 for linear, 1 for RBF
+    :param gamma: gamma of RBF
+    :return: kernel
+    """
+    # Compute kernel
+    if not kernel_type:
+        # Linear
+        kernel = training_images.T.dot(training_images)
+    else:
+        # RBF
+        kernel = np.exp(-gamma * cdist(training_images.T, training_images.T, 'sqeuclidean'))
+
+    return kernel
+
+
 def decorrelate(num_of_images: int, images: np.ndarray, eigenvectors: np.ndarray) -> np.ndarray:
     """
     Decorrelate original images into components space
@@ -181,6 +206,9 @@ def parse_arguments() -> Namespace:
     parser.add_argument('-m', '--mode', help='Mode for PCA/LDA, 0: simple, 1: kernel', default=0, type=check_int_range)
     parser.add_argument('-k', '--k_neighbors', help='Number of nearest neighbors to decide classification', default=5,
                         type=int)
+    parser.add_argument('-ker', '--kernel', help='Kernel type, 0 for linear, 1 for RBF', default=0,
+                        type=check_int_range)
+    parser.add_argument('-g', '--gamma', help='Gamma of RBF', default=0.0001, type=float)
     parser.add_argument('-v', '--verbosity', help='verbosity level (0-1)', default=0, type=check_int_range)
 
     return parser.parse_args()
@@ -197,6 +225,8 @@ if __name__ == '__main__':
     algo = args.algorithm
     m = args.mode
     k = args.k_neighbors
+    ker_type = args.kernel
+    g = args.gamma
     verbosity = args.verbosity
 
     # Read training images
@@ -235,7 +265,7 @@ if __name__ == '__main__':
     if not algo:
         # PCA
         info_log('=== Principal components analysis ===')
-        principal_components_analysis(train_images, train_labels, test_images, test_labels, m, k)
+        principal_components_analysis(train_images, train_labels, test_images, test_labels, m, k, ker_type, g)
     else:
         # LDA
         info_log('=== Linear discriminative analysis ===')

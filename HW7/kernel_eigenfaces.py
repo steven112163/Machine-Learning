@@ -39,12 +39,34 @@ def principal_components_analysis(training_images: np.ndarray, training_labels: 
     target_eigenvectors = eigenvectors[:, target_idx].real
 
     # Transform eigenvectors into eigenfaces
+    info_log('=== Transform eigenvectors into eigenfaces ===')
     eigenfaces = target_eigenvectors.T.reshape((25, 107, 97))
-    plt.figure(1)
+    fig = plt.figure(1)
+    fig.canvas.set_window_title('Eigenfaces')
     for idx in range(25):
         plt.subplot(5, 5, idx + 1)
         plt.axis('off')
         plt.imshow(eigenfaces[idx, :, :], cmap='gray')
+
+    # Randomly reconstruct 10 eigenfaces
+    info_log('=== Reconstruct 10 faces ===')
+    reconstructed_images = np.zeros((10, 107 * 97))
+    choice = np.random.choice(num_of_images, 10)
+    for idx in range(10):
+        reconstructed_images[idx, :] = training_images[choice[idx], :].dot(target_eigenvectors).dot(
+            target_eigenvectors.T)
+    fig = plt.figure(2)
+    fig.canvas.set_window_title('Reconstructed faces')
+    for idx in range(10):
+        # Original image
+        plt.subplot(10, 2, idx * 2 + 1)
+        plt.axis('off')
+        plt.imshow(training_images[choice[idx], :].reshape((107, 97)), cmap='gray')
+
+        # Reconstructed image
+        plt.subplot(10, 2, idx * 2 + 2)
+        plt.axis('off')
+        plt.imshow(reconstructed_images[idx, :].reshape((107, 97)), cmap='gray')
     plt.show()
 
 

@@ -32,9 +32,7 @@ def principal_components_analysis(training_images: np.ndarray, training_labels: 
     else:
         # Kernel PCA
         info_log(f'=== {"RBF" if kernel_type else "Linear"} kernel PCA ===')
-        kernel = kernel_pca(training_images, kernel_type, gamma)
-        matrix_n = np.ones((107 * 97, 107 * 97), dtype=float) / (107 * 97)
-        matrix = kernel - matrix_n.dot(kernel) - kernel.dot(matrix_n) + matrix_n.dot(kernel).dot(matrix_n)
+        matrix = kernel_pca(training_images, kernel_type, gamma)
 
     # Compute eigenvalues and eigenvectors
     info_log('=== Calculate eigenvalues and eigenvectors ===')
@@ -129,7 +127,11 @@ def kernel_pca(training_images: np.ndarray, kernel_type: int, gamma: float) -> n
         # RBF
         kernel = np.exp(-gamma * cdist(training_images.T, training_images.T, 'sqeuclidean'))
 
-    return kernel
+    # Get centered kernel
+    matrix_n = np.ones((107 * 97, 107 * 97), dtype=float) / (107 * 97)
+    matrix = kernel - matrix_n.dot(kernel) - kernel.dot(matrix_n) + matrix_n.dot(kernel).dot(matrix_n)
+
+    return matrix
 
 
 def decorrelate(num_of_images: int, images: np.ndarray, eigenvectors: np.ndarray) -> np.ndarray:

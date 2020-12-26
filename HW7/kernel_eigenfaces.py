@@ -8,7 +8,7 @@ from scipy.spatial.distance import cdist
 
 
 def principal_components_analysis(training_images: np.ndarray, training_labels: np.ndarray, testing_images: np.ndarray,
-                                  testing_labels: np.ndarray, mode: int) -> None:
+                                  testing_labels: np.ndarray, mode: int, k_neighbors: int) -> None:
     """
     Principal components analysis
     :param training_images: training images
@@ -16,15 +16,16 @@ def principal_components_analysis(training_images: np.ndarray, training_labels: 
     :param testing_images: testing images
     :param testing_labels: testing labels
     :param mode: 0: simple, 1: kernel
+    :param k_neighbors: number of nearest neighbors to decide classification
     :return: None
     """
     # Get number of images
-    num_of_images = len(training_images)
+    num_of_training = len(training_images)
 
     if not mode:
         # Simple PCA
         info_log('=== Simple PCA ===')
-        matrix = simple_pca(num_of_images, training_images)
+        matrix = simple_pca(num_of_training, training_images)
     else:
         # Kernel PCA
         info_log('=== Kernel PCA ===')
@@ -51,7 +52,7 @@ def principal_components_analysis(training_images: np.ndarray, training_labels: 
     # Randomly reconstruct 10 eigenfaces
     info_log('=== Reconstruct 10 faces ===')
     reconstructed_images = np.zeros((10, 107 * 97))
-    choice = np.random.choice(num_of_images, 10)
+    choice = np.random.choice(num_of_training, 10)
     for idx in range(10):
         reconstructed_images[idx, :] = training_images[choice[idx], :].dot(target_eigenvectors).dot(
             target_eigenvectors.T)
@@ -67,6 +68,25 @@ def principal_components_analysis(training_images: np.ndarray, training_labels: 
         plt.subplot(10, 2, idx * 2 + 2)
         plt.axis('off')
         plt.imshow(reconstructed_images[idx, :].reshape((107, 97)), cmap='gray')
+
+    # Classify
+    info_log('=== Classify ===')
+    num_of_testing = len(testing_images)
+    decorrelated_training = decorrelate(num_of_training, training_images, target_eigenvectors)
+    decorrelated_testing = decorrelate(num_of_testing, testing_images, target_eigenvectors)
+    error = 0
+    distance = np.zeros(num_of_training)
+    for test_idx, test in enumerate(decorrelated_testing):
+        for train_idx, train in enumerate(decorrelated_training):
+            distance[train_idx] = np.linalg.norm(test - train)
+        min_distances = np.argsort(distance)[:k_neighbors]
+        predict = np.argmax(np.bincount(training_labels[min_distances]))
+        if predict != testing_labels[test_idx]:
+            error += 1
+    print(f'Error count: {error}\nError rate: {float(error) / num_of_testing}')
+
+    # Plot
+    plt.tight_layout()
     plt.show()
 
 
@@ -85,6 +105,21 @@ def simple_pca(num_of_images: int, training_images: np.ndarray) -> np.ndarray:
     covariance = difference.dot(difference.T) / num_of_images
 
     return covariance
+
+
+def decorrelate(num_of_images: int, images: np.ndarray, eigenvectors: np.ndarray) -> np.ndarray:
+    """
+    Decorrelate original images into components space
+    :param num_of_images: number of images
+    :param images: given original images
+    :param eigenvectors: eigenvectors
+    :return: decorrelated images
+    """
+    decorrelated_images = np.zeros((num_of_images, 25))
+    for idx, image in enumerate(images):
+        decorrelated_images[idx, :] = image.dot(eigenvectors)
+
+    return decorrelated_images
 
 
 def linear_discriminative_analysis(training_images: np.ndarray, training_labels: np.ndarray, testing_images: np.ndarray,
@@ -144,6 +179,8 @@ def parse_arguments() -> Namespace:
     parser.add_argument('-algo', '--algorithm', help='Algorithm to be used, 0: PCA, 1: LDA', default=0,
                         type=check_int_range)
     parser.add_argument('-m', '--mode', help='Mode for PCA/LDA, 0: simple, 1: kernel', default=0, type=check_int_range)
+    parser.add_argument('-k', '--k_neighbors', help='Number of nearest neighbors to decide classification', default=5,
+                        type=int)
     parser.add_argument('-v', '--verbosity', help='verbosity level (0-1)', default=0, type=check_int_range)
 
     return parser.parse_args()
@@ -159,6 +196,7 @@ if __name__ == '__main__':
     dir_name = args.image
     algo = args.algorithm
     m = args.mode
+    k = args.k_neighbors
     verbosity = args.verbosity
 
     # Read training images
@@ -197,7 +235,7 @@ if __name__ == '__main__':
     if not algo:
         # PCA
         info_log('=== Principal components analysis ===')
-        principal_components_analysis(train_images, train_labels, test_images, test_labels, m)
+        principal_components_analysis(train_images, train_labels, test_images, test_labels, m, k)
     else:
         # LDA
         info_log('=== Linear discriminative analysis ===')

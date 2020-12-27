@@ -89,7 +89,7 @@ def kernel_pca(training_images: np.ndarray, kernel_type: int, gamma: float) -> n
         kernel = np.exp(-gamma * cdist(training_images.T, training_images.T, 'sqeuclidean'))
 
     # Get centered kernel
-    matrix_n = np.ones((107 * 97, 107 * 97), dtype=float) / (107 * 97)
+    matrix_n = np.ones((29 * 24, 29 * 24), dtype=float) / (29 * 24)
     matrix = kernel - matrix_n.dot(kernel) - kernel.dot(matrix_n) + matrix_n.dot(kernel).dot(matrix_n)
 
     return matrix
@@ -114,22 +114,14 @@ def linear_discriminative_analysis(training_images: np.ndarray, training_labels:
     _, num_of_each_class = np.unique(training_labels, return_counts=True)
     num_of_training = len(training_images)
 
-    '''# Perform PCA first
-    info_log('=== Simple PCA first ===')
-    matrix = simple_pca(num_of_training, training_images)
-    
-    # Find 25 first largest eigenvectors
-    info_log('=== 25 first eigenvectors from simple PCA ===')
-    pca_target_eigenvectors = find_target_eigenvectors(matrix)
-    
-    # Get decorrelated training images
-    info_log('=== Decorrelate images ===')
-    decorrelated_training = decorrelate(num_of_training, training_images, pca_target_eigenvectors)'''
-
     if not mode:
         # Simple LDA
         info_log('=== Simple LDA ===')
         matrix = simple_lda(num_of_each_class, training_images, training_labels)
+    else:
+        # Kernel LDA
+        info_log(f'=== {"RBF" if kernel_type else "Linear"} kernel LDA ===')
+        matrix = kernel_lda(num_of_each_class, training_images, training_labels, kernel_type, gamma)
 
     # Find 25 first largest eigenvectors
     target_eigenvectors = find_target_eigenvectors(matrix)
@@ -166,27 +158,85 @@ def simple_lda(num_of_each_class: np.ndarray, training_images: np.ndarray, train
     # Get mean of each class
     info_log('=== Calculate mean of each class ===')
     num_of_classes = len(num_of_each_class)
-    class_mean = np.zeros((num_of_classes, 107 * 97))
+    class_mean = np.zeros((num_of_classes, 29 * 24))
     for label in range(num_of_classes):
         class_mean[label, :] = np.mean(training_images[training_labels == label + 1], axis=0)
 
     # Get between-class scatter
     info_log('=== Calculate between-class scatter ===')
-    scatter_b = np.zeros((107 * 97, 107 * 97), dtype=float)
+    scatter_b = np.zeros((29 * 24, 29 * 24), dtype=float)
     for idx, num in enumerate(num_of_each_class):
-        difference = (class_mean[idx] - overall_mean).reshape((107 * 97, 1))
+        difference = (class_mean[idx] - overall_mean).reshape((29 * 24, 1))
         scatter_b += num * difference.dot(difference.T)
 
     # Get within-class scatter
     info_log('=== Calculate within-class scatter ===')
-    scatter_w = np.zeros((107 * 97, 107 * 97), dtype=float)
+    scatter_w = np.zeros((29 * 24, 29 * 24), dtype=float)
     for idx, mean in enumerate(class_mean):
         difference = training_images[training_labels == idx + 1] - mean
         scatter_w += difference.T.dot(difference)
 
     # Get Sw^(-1) * Sb
-    info_log('=== Calculate inv(within-class)*between-class ===')
+    info_log('=== Calculate inv(within-class) * between-class ===')
     matrix = np.linalg.pinv(scatter_w).dot(scatter_b)
+
+    return matrix
+
+
+def kernel_lda(num_of_each_class: np.ndarray, training_images: np.ndarray, training_labels: np.ndarray,
+               kernel_type: int, gamma: float) -> np.ndarray:
+    """
+    Kernel LDA
+    :param num_of_each_class: number of elements in each class
+    :param training_images: training images
+    :param training_labels: training labels
+    :param kernel_type: 0 for linear, 1 for RBF
+    :param gamma: gamma of RBF
+    :return: matrix
+    """
+    # Compute kernel
+    num_of_classes = len(num_of_each_class)
+    num_of_images = len(training_images)
+    if not kernel_type:
+        # Linear
+        kernel_of_each_class = np.zeros((num_of_classes, 29 * 24, 29 * 24))
+        for idx in range(num_of_classes):
+            images = training_images[training_labels == idx + 1]
+            kernel_of_each_class[idx] = images.T.dot(images)
+        kernel_of_all = training_images.T.dot(training_images)
+    else:
+        # RBF
+        kernel_of_each_class = np.zeros((num_of_classes, 29 * 24, 29 * 24))
+        for idx in range(num_of_classes):
+            images = training_images[training_labels == idx + 1]
+            kernel_of_each_class[idx] = np.exp(-gamma * cdist(images.T, images.T, 'sqeuclidean'))
+        kernel_of_all = np.exp(-gamma * cdist(training_images.T, training_images.T, 'sqeuclidean'))
+
+    # Compute N
+    info_log('=== Calculate matrix N ===')
+    matrix_n = np.zeros((29 * 24, 29 * 24))
+    identity_matrix = np.eye(29 * 24)
+    for idx, num in enumerate(num_of_each_class):
+        matrix_n += kernel_of_each_class[idx].dot(identity_matrix - num * identity_matrix).dot(
+            kernel_of_each_class[idx].T)
+
+    # Compute M
+    info_log('=== Calculate matrix M ===')
+    matrix_m_i = np.zeros((num_of_classes, 29 * 24))
+    for idx, kernel in enumerate(kernel_of_each_class):
+        for row_idx, row in enumerate(kernel):
+            matrix_m_i[idx, row_idx] = np.sum(row) / num_of_each_class[idx]
+    matrix_m_star = np.zeros(29 * 24)
+    for idx, row in enumerate(kernel_of_all):
+        matrix_m_star[idx] = np.sum(row) / num_of_images
+    matrix_m = np.zeros((29 * 24, 29 * 24))
+    for idx, num in enumerate(num_of_each_class):
+        difference = (matrix_m_i[idx] - matrix_m_star).reshape((29 * 24, 1))
+        matrix_m += num * difference.dot(difference.T)
+
+    # Get N^(-1) * M
+    info_log('=== Calculate inv(N) * M ===')
+    matrix = np.linalg.pinv(matrix_n).dot(matrix_m)
 
     return matrix
 
@@ -216,7 +266,7 @@ def transform_eigenvectors_into_faces(target_eigenvectors: np.ndarray, pca_or_ld
     :param pca_or_lda: 0 for pca, 1 for lda
     :return: None
     """
-    faces = target_eigenvectors.T.reshape((25, 107, 97))
+    faces = target_eigenvectors.T.reshape((25, 29, 24))
     fig = plt.figure(1)
     fig.canvas.set_window_title(f'{"Eigenfaces" if not pca_or_lda else "Fisherfaces"}')
     for idx in range(25):
@@ -233,7 +283,7 @@ def construct_faces(num_of_images: int, training_images: np.ndarray, target_eige
     :param target_eigenvectors: 25 first largest eigenvectors
     :return: None
     """
-    reconstructed_images = np.zeros((10, 107 * 97))
+    reconstructed_images = np.zeros((10, 29 * 24))
     choice = np.random.choice(num_of_images, 10)
     for idx in range(10):
         reconstructed_images[idx, :] = training_images[choice[idx], :].dot(target_eigenvectors).dot(
@@ -244,12 +294,12 @@ def construct_faces(num_of_images: int, training_images: np.ndarray, target_eige
         # Original image
         plt.subplot(10, 2, idx * 2 + 1)
         plt.axis('off')
-        plt.imshow(training_images[choice[idx], :].reshape((107, 97)), cmap='gray')
+        plt.imshow(training_images[choice[idx], :].reshape((29, 24)), cmap='gray')
 
         # Reconstructed image
         plt.subplot(10, 2, idx * 2 + 2)
         plt.axis('off')
-        plt.imshow(reconstructed_images[idx, :].reshape((107, 97)), cmap='gray')
+        plt.imshow(reconstructed_images[idx, :].reshape((29, 24)), cmap='gray')
 
 
 def decorrelate(num_of_images: int, images: np.ndarray, eigenvectors: np.ndarray) -> np.ndarray:
@@ -374,11 +424,11 @@ if __name__ == '__main__':
         num_of_files = len([file for file in directory if file.is_file()])
     with os.scandir(f'{dir_name}/Training') as directory:
         train_labels = np.zeros(num_of_files, dtype=int)
-        # Images will be resized to 107 (rows) * 97 (cols)
-        train_images = np.zeros((num_of_files, 107 * 97))
+        # Images will be resized to 29 (rows) * 24 (cols)
+        train_images = np.zeros((num_of_files, 29 * 24))
         for index, file in enumerate(directory):
             if file.path.endswith('.pgm') and file.is_file():
-                face = np.asarray(Image.open(file.path).resize((97, 107))).reshape(1, -1)
+                face = np.asarray(Image.open(file.path).resize((24, 29))).reshape(1, -1)
                 train_images[index, :] = face
                 train_labels[index] = int(file.name[7:9])
 
@@ -390,11 +440,11 @@ if __name__ == '__main__':
         num_of_files = len([file for file in directory if file.is_file()])
     with os.scandir(f'{dir_name}/Testing') as directory:
         test_labels = np.zeros(num_of_files, dtype=int)
-        # Images will be resized to 107 (rows) * 97 (cols)
-        test_images = np.zeros((num_of_files, 107 * 97))
+        # Images will be resized to 29 (rows) * 24 (cols)
+        test_images = np.zeros((num_of_files, 29 * 24))
         for index, file in enumerate(directory):
             if file.path.endswith('.pgm') and file.is_file():
-                face = np.asarray(Image.open(file.path).resize((97, 107))).reshape(1, -1)
+                face = np.asarray(Image.open(file.path).resize((24, 29))).reshape(1, -1)
                 test_images[index, :] = face
                 test_labels[index] = int(file.name[7:9])
 

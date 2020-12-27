@@ -47,19 +47,8 @@ def principal_components_analysis(training_images: np.ndarray, training_labels: 
 
     # Classify
     info_log('=== Classify ===')
-    num_of_testing = len(testing_images)
-    decorrelated_training = decorrelate(num_of_training, training_images, target_eigenvectors)
-    decorrelated_testing = decorrelate(num_of_testing, testing_images, target_eigenvectors)
-    error = 0
-    distance = np.zeros(num_of_training)
-    for test_idx, test in enumerate(decorrelated_testing):
-        for train_idx, train in enumerate(decorrelated_training):
-            distance[train_idx] = np.linalg.norm(test - train)
-        min_distances = np.argsort(distance)[:k_neighbors]
-        predict = np.argmax(np.bincount(training_labels[min_distances]))
-        if predict != testing_labels[test_idx]:
-            error += 1
-    print(f'Error count: {error}\nError rate: {float(error) / num_of_testing}')
+    classify(num_of_training, len(testing_images), training_images, training_labels, testing_images, testing_labels,
+             target_eigenvectors, k_neighbors)
 
     # Plot
     plt.tight_layout()
@@ -125,6 +114,18 @@ def linear_discriminative_analysis(training_images: np.ndarray, training_labels:
     _, num_of_each_class = np.unique(training_labels, return_counts=True)
     num_of_training = len(training_images)
 
+    '''# Perform PCA first
+    info_log('=== Simple PCA first ===')
+    matrix = simple_pca(num_of_training, training_images)
+    
+    # Find 25 first largest eigenvectors
+    info_log('=== 25 first eigenvectors from simple PCA ===')
+    pca_target_eigenvectors = find_target_eigenvectors(matrix)
+    
+    # Get decorrelated training images
+    info_log('=== Decorrelate images ===')
+    decorrelated_training = decorrelate(num_of_training, training_images, pca_target_eigenvectors)'''
+
     if not mode:
         # Simple LDA
         info_log('=== Simple LDA ===')
@@ -140,6 +141,11 @@ def linear_discriminative_analysis(training_images: np.ndarray, training_labels:
     # Randomly reconstruct 10 eigenfaces
     info_log('=== Reconstruct 10 faces ===')
     construct_faces(num_of_training, training_images, target_eigenvectors)
+
+    # Classify
+    info_log('=== Classify ===')
+    classify(num_of_training, len(testing_images), training_images, training_labels, testing_images, testing_labels,
+             target_eigenvectors, k_neighbors)
 
     plt.tight_layout()
     plt.show()
@@ -259,6 +265,35 @@ def decorrelate(num_of_images: int, images: np.ndarray, eigenvectors: np.ndarray
         decorrelated_images[idx, :] = image.dot(eigenvectors)
 
     return decorrelated_images
+
+
+def classify(num_of_training: int, num_of_testing: int, training_images: np.ndarray, training_labels: np.ndarray,
+             testing_images: np.ndarray, testing_labels: np.ndarray, target_eigenvectors: np.ndarray,
+             k_neighbors: int) -> None:
+    """
+    Classify
+    :param num_of_training: number of training images
+    :param num_of_testing: number of testing images
+    :param training_images: training images
+    :param training_labels: training labels
+    :param testing_images: testing images
+    :param testing_labels: testing labels
+    :param target_eigenvectors: 25 first largest eigenvectors
+    :param k_neighbors: k nearest neighbors
+    :return: None
+    """
+    decorrelated_training = decorrelate(num_of_training, training_images, target_eigenvectors)
+    decorrelated_testing = decorrelate(num_of_testing, testing_images, target_eigenvectors)
+    error = 0
+    distance = np.zeros(num_of_training)
+    for test_idx, test in enumerate(decorrelated_testing):
+        for train_idx, train in enumerate(decorrelated_training):
+            distance[train_idx] = np.linalg.norm(test - train)
+        min_distances = np.argsort(distance)[:k_neighbors]
+        predict = np.argmax(np.bincount(training_labels[min_distances]))
+        if predict != testing_labels[test_idx]:
+            error += 1
+    print(f'Error count: {error}\nError rate: {float(error) / num_of_testing}')
 
 
 def info_log(log: str) -> None:

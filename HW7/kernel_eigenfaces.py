@@ -403,7 +403,8 @@ def parse_arguments() -> Namespace:
 if __name__ == '__main__':
     """
     Main function
-    command: python3 kernel_eigenfaces.py [-i name_of_directory] [-algo (0-1)] [-m (0-1)] [-v (0-1)]
+    command: python3 kernel_eigenfaces.py [-i name_of_directory] [-algo (0-1)] [-m (0-1)] [-k neighbors] [-ker (0-1)]
+                [-g gamma] [-v (0-1)]
     """
     # Get arguments
     args = parse_arguments()

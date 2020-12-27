@@ -113,11 +113,11 @@ def pca(matrix_x: np.ndarray, no_dims: int = 50) -> np.ndarray:
     return matrix_y
 
 
-def tsne(images: np.ndarray, labels: np.ndarray, mode: int, no_dims: int = 2, initial_dims: int = 50,
-         perplexity: float = 20.0) -> np.ndarray:
+def sne(images: np.ndarray, labels: np.ndarray, mode: int, no_dims: int = 2, initial_dims: int = 50,
+        perplexity: float = 20.0) -> np.ndarray:
     """
-    t-SNE
-    Run t-SNE on the dataset in the NxD matrix images to reduce its dimensionality to no_dims dimensions.
+    SNE
+    Run SNE on the dataset in the NxD matrix images to reduce its dimensionality to no_dims dimensions.
     :param images: images
     :param labels: labels
     :param mode: 0 for t-SNE, 1 for symmetric SNE
@@ -163,15 +163,26 @@ def tsne(images: np.ndarray, labels: np.ndarray, mode: int, no_dims: int = 2, in
         # Compute pairwise affinities
         sum_y = np.sum(np.square(solution_y), 1)
         num = -2. * np.dot(solution_y, solution_y.T)
-        num = 1. / (1. + np.add(np.add(num, sum_y).T, sum_y))
+        if not mode:
+            # t-SNE
+            num = 1. / (1. + np.add(np.add(num, sum_y).T, sum_y))
+        else:
+            # symmetric SNE
+            num = np.exp(-1. * np.add(np.add(num, sum_y).T, sum_y))
         num[range(n), range(n)] = 0.
         q = num / np.sum(num)
         q = np.maximum(q, 1e-12)
 
         # Compute gradient
         p_q = p - q
-        for i in range(n):
-            d_y[i, :] = np.sum(np.tile(p_q[:, i] * num[:, i], (no_dims, 1)).T * (solution_y[i, :] - solution_y), 0)
+        if not mode:
+            # t-SNE
+            for i in range(n):
+                d_y[i, :] = np.sum(np.tile(p_q[:, i] * num[:, i], (no_dims, 1)).T * (solution_y[i, :] - solution_y), 0)
+        else:
+            # symmetric SNE
+            for i in range(n):
+                d_y[i, :] = np.sum(np.tile(p_q[:, i], (no_dims, 1)).T * (solution_y[i, :] - solution_y), 0)
 
         # Perform the update
         if iteration < 20:
@@ -296,7 +307,7 @@ def parse_arguments() -> Namespace:
     Setup an ArgumentParser and get arguments from command-line
     :return: arguments
     """
-    parser = ArgumentParser(description='t-SNE')
+    parser = ArgumentParser(description='SNE')
     parser.add_argument('-i', '--image', help='Path to image file', default='data/mnist/mnist2500_X.txt', type=str)
     parser.add_argument('-l', '--label', help='Path to label file', default='data/mnist/mnist2500_labels.txt', type=str)
     parser.add_argument('-m', '--mode', help='Mode for SNE, 0: t-SNE, 1: symmetric SNE', default=0,
@@ -320,10 +331,15 @@ if __name__ == "__main__":
     pp = args.perplexity
     verbosity = args.verbosity
 
+    # Read data
+    info_log('=== Read data ===')
     x = np.loadtxt(image_file)
     label_of_x = np.loadtxt(label_file)
+
+    # Start SNE
     try:
-        y = tsne(x, label_of_x, m, 2, 50, pp)
+        info_log(f'=== Start {"t-SNE" if not m else "symmetric SNE"} ===')
+        y = sne(x, label_of_x, m, 2, 50, pp)
         plt.figure(2)
         plt.scatter(y[:, 0], y[:, 1], 20, label_of_x)
         plt.title(f'{"t-SNE" if not m else "symmetric SNE"}, perplexity = {pp}')

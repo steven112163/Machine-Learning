@@ -13,178 +13,245 @@
 #  Copyright (c) 2008 Tilburg University. All rights reserved.
 
 import numpy as np
-import pylab
+import matplotlib.pyplot as plt
+import sys
+from argparse import ArgumentParser, ArgumentTypeError, Namespace
+from typing import Tuple
 
 
-def Hbeta(D=np.array([]), beta=1.0):
+def h_beta(data: np.ndarray, beta: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
     """
-        Compute the perplexity and the P-row for a specific value of the
-        precision of a Gaussian distribution.
+    Compute the perplexity and the P-row for a specific value of the precision of a Gaussian distribution.
+    :param data: data
+    :param beta: power beta
+    :return: h and p
     """
-
     # Compute P-row and corresponding perplexity
-    P = np.exp(-D.copy() * beta)
-    sumP = sum(P)
-    H = np.log(sumP) + beta * np.sum(D * P) / sumP
-    P = P / sumP
-    return H, P
+    p = np.exp(-data.copy() * beta)
+    sum_p = sum(p)
+    h = np.log(sum_p) + beta * np.sum(data * p) / sum_p
+    p = p / sum_p
+
+    return h, p
 
 
-def x2p(X=np.array([]), tol=1e-5, perplexity=30.0):
+def x2p(matrix_x: np.ndarray, tol: float = 1e-5, perplexity: float = 30.0) -> np.ndarray:
     """
-        Performs a binary search to get P-values in such a way that each
-        conditional Gaussian has the same perplexity.
+    Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
+    :param matrix_x: matrix x
+    :param tol: tol
+    :param perplexity: perplexity
+    :return: p
     """
-
     # Initialize some variables
-    print("Computing pairwise distances...")
-    (n, d) = X.shape
-    sum_X = np.sum(np.square(X), 1)
-    D = np.add(np.add(-2 * np.dot(X, X.T), sum_X).T, sum_X)
-    P = np.zeros((n, n))
+    info_log('=== Computing pairwise distances ===')
+    n, d = matrix_x.shape
+    sum_x = np.sum(np.square(matrix_x), 1)
+    d = np.add(np.add(-2 * np.dot(matrix_x, matrix_x.T), sum_x).T, sum_x)
+    p = np.zeros((n, n))
     beta = np.ones((n, 1))
-    logU = np.log(perplexity)
+    log_u = np.log(perplexity)
 
-    # Loop over all datapoints
+    # Loop over all data points
     for i in range(n):
-
         # Print progress
         if i % 500 == 0:
-            print("Computing P-values for point %d of %d..." % (i, n))
+            info_log(f'Computing P-values for point {i} of {n}...')
 
         # Compute the Gaussian kernel and entropy for the current precision
-        betamin = -np.inf
-        betamax = np.inf
-        Di = D[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))]
-        (H, thisP) = Hbeta(Di, beta[i])
+        beta_min = -np.inf
+        beta_max = np.inf
+        d_i = d[i, np.concatenate((np.r_[0:i], np.r_[i + 1:n]))]
+        h, this_p = h_beta(d_i, beta[i])
 
         # Evaluate whether the perplexity is within tolerance
-        Hdiff = H - logU
+        h_diff = h - log_u
         tries = 0
-        while np.abs(Hdiff) > tol and tries < 50:
-
+        while np.abs(h_diff) > tol and tries < 50:
             # If not, increase or decrease precision
-            if Hdiff > 0:
-                betamin = beta[i].copy()
-                if betamax == np.inf or betamax == -np.inf:
+            if h_diff > 0:
+                beta_min = beta[i].copy()
+                if beta_max == np.inf or beta_max == -np.inf:
                     beta[i] = beta[i] * 2.
                 else:
-                    beta[i] = (beta[i] + betamax) / 2.
+                    beta[i] = (beta[i] + beta_max) / 2.
             else:
-                betamax = beta[i].copy()
-                if betamin == np.inf or betamin == -np.inf:
+                beta_max = beta[i].copy()
+                if beta_min == np.inf or beta_min == -np.inf:
                     beta[i] = beta[i] / 2.
                 else:
-                    beta[i] = (beta[i] + betamin) / 2.
+                    beta[i] = (beta[i] + beta_min) / 2.
 
             # Recompute the values
-            (H, thisP) = Hbeta(Di, beta[i])
-            Hdiff = H - logU
+            h, this_p = h_beta(d_i, beta[i])
+            h_diff = h - log_u
             tries += 1
 
         # Set the final row of P
-        P[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))] = thisP
+        p[i, np.concatenate((np.r_[0:i], np.r_[i + 1:n]))] = this_p
 
     # Return final P-matrix
-    print("Mean value of sigma: %f" % np.mean(np.sqrt(1 / beta)))
-    return P
+    info_log(f'=== Mean value of sigma: {np.mean(np.sqrt(1 / beta))} ===')
+    return p
 
 
-def pca(X=np.array([]), no_dims=50):
+def pca(matrix_x: np.ndarray, no_dims: int = 50) -> np.ndarray:
     """
-        Runs PCA on the NxD array X in order to reduce its dimensionality to
-        no_dims dimensions.
+    Runs PCA on the NxD matrix X in order to reduce its dimensionality to no_dims dimensions.
+    :param matrix_x:
+    :param no_dims: number of dimensions
+    :return: matrix y with reduced dimensionality
     """
+    info_log('=== Preprocessing the data using PCA ===')
+    n, d = matrix_x.shape
+    difference = matrix_x - np.tile(np.mean(matrix_x, 0), (n, 1))
+    eigenvalues, eigenvectors = np.linalg.eig(np.dot(difference.T, difference))
+    matrix_y = np.dot(difference, eigenvectors[:, 0:no_dims])
 
-    print("Preprocessing the data using PCA...")
-    (n, d) = X.shape
-    X = X - np.tile(np.mean(X, 0), (n, 1))
-    (l, M) = np.linalg.eig(np.dot(X.T, X))
-    Y = np.dot(X, M[:, 0:no_dims])
-    return Y
+    return matrix_y
 
 
-def tsne(X=np.array([]), no_dims=2, initial_dims=50, perplexity=30.0):
+def tsne(images: np.ndarray, no_dims: int = 2, initial_dims: int = 50, perplexity: float = 30.0) -> np.ndarray:
     """
-        Runs t-SNE on the dataset in the NxD array X to reduce its
-        dimensionality to no_dims dimensions. The syntaxis of the function is
-        `Y = tsne.tsne(X, no_dims, perplexity), where X is an NxD NumPy array.
+    t-SNE
+    Run t-SNE on the dataset in the NxD matrix images to reduce its dimensionality to no_dims dimensions.
+    :param images: images
+    :param no_dims: number of dimensions
+    :param initial_dims: initial dimensions
+    :param perplexity: perplexity
+    :return: solution Y
     """
-
     # Check inputs
     if isinstance(no_dims, float):
-        print("Error: array X should have type float.")
-        return -1
+        error_log('Array X should have type float.')
+        raise ValueError('Array X should have type float.')
     if round(no_dims) != no_dims:
-        print("Error: number of dimensions should be an integer.")
-        return -1
+        error_log('Number of dimensions should be an integer.')
+        raise ValueError('Number of dimensions should be an integer.')
 
     # Initialize variables
-    X = pca(X, initial_dims).real
-    (n, d) = X.shape
+    matrix_x = pca(images, initial_dims).real
+    n, d = matrix_x.shape
     max_iter = 1000
     initial_momentum = 0.5
     final_momentum = 0.8
     eta = 500
     min_gain = 0.01
-    Y = np.random.randn(n, no_dims)
-    dY = np.zeros((n, no_dims))
-    iY = np.zeros((n, no_dims))
+    solution_y = np.random.randn(n, no_dims)
+    d_y = np.zeros((n, no_dims))
+    i_y = np.zeros((n, no_dims))
     gains = np.ones((n, no_dims))
 
     # Compute P-values
-    P = x2p(X, 1e-5, perplexity)
-    P = P + np.transpose(P)
-    P = P / np.sum(P)
-    P = P * 4.									# early exaggeration
-    P = np.maximum(P, 1e-12)
+    p = x2p(matrix_x, 1e-5, perplexity)
+    p = p + np.transpose(p)
+    p = p / np.sum(p)
+    p = p * 4.  # early exaggeration
+    p = np.maximum(p, 1e-12)
 
     # Run iterations
-    for iter in range(max_iter):
+    for iteration in range(max_iter):
 
         # Compute pairwise affinities
-        sum_Y = np.sum(np.square(Y), 1)
-        num = -2. * np.dot(Y, Y.T)
-        num = 1. / (1. + np.add(np.add(num, sum_Y).T, sum_Y))
+        sum_y = np.sum(np.square(solution_y), 1)
+        num = -2. * np.dot(solution_y, solution_y.T)
+        num = 1. / (1. + np.add(np.add(num, sum_y).T, sum_y))
         num[range(n), range(n)] = 0.
-        Q = num / np.sum(num)
-        Q = np.maximum(Q, 1e-12)
+        q = num / np.sum(num)
+        q = np.maximum(q, 1e-12)
 
         # Compute gradient
-        PQ = P - Q
+        p_q = p - q
         for i in range(n):
-            dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i], (no_dims, 1)).T * (Y[i, :] - Y), 0)
+            d_y[i, :] = np.sum(np.tile(p_q[:, i] * num[:, i], (no_dims, 1)).T * (solution_y[i, :] - solution_y), 0)
 
         # Perform the update
-        if iter < 20:
+        if iteration < 20:
             momentum = initial_momentum
         else:
             momentum = final_momentum
-        gains = (gains + 0.2) * ((dY > 0.) != (iY > 0.)) + \
-                (gains * 0.8) * ((dY > 0.) == (iY > 0.))
+        gains = (gains + 0.2) * ((d_y > 0.) != (i_y > 0.)) + \
+                (gains * 0.8) * ((d_y > 0.) == (i_y > 0.))
         gains[gains < min_gain] = min_gain
-        iY = momentum * iY - eta * (gains * dY)
-        Y = Y + iY
-        Y = Y - np.tile(np.mean(Y, 0), (n, 1))
+        i_y = momentum * i_y - eta * (gains * d_y)
+        solution_y = solution_y + i_y
+        solution_y = solution_y - np.tile(np.mean(solution_y, 0), (n, 1))
 
         # Compute current value of cost function
-        if (iter + 1) % 10 == 0:
-            C = np.sum(P * np.log(P / Q))
-            print("Iteration %d: error is %f" % (iter + 1, C))
+        if (iteration + 1) % 10 == 0:
+            c = np.sum(p * np.log(p / q))
+            info_log(f'Iteration {iteration + 1}: error is {c}...')
 
         # Stop lying about P-values
         if iter == 100:
-            P = P / 4.
+            p = p / 4.
 
     # Return solution
-    return Y
+    return solution_y
+
+
+def info_log(log: str) -> None:
+    """
+    Print information log
+    :param log: log to be displayed
+    :return: None
+    """
+    if verbosity > 0:
+        print(f'[\033[96mINFO\033[00m] {log}')
+        sys.stdout.flush()
+
+
+def error_log(log: str) -> None:
+    """
+    Print error log
+    :param log: log to be displayed
+    :return: None
+    """
+    print(f'[\033[91mERROR\033[00m] {log}')
+    sys.stdout.flush()
+
+
+def check_int_range(value: str) -> int:
+    """
+    Check whether value is 0 or 1
+    :param value: string value
+    :return: integer value
+    """
+    int_value = int(value)
+    if int_value != 0 and int_value != 1:
+        raise ArgumentTypeError(f'"{value}" is an invalid value. It should be 0 or 1.')
+    return int_value
+
+
+def parse_arguments() -> Namespace:
+    """
+    Setup an ArgumentParser and get arguments from command-line
+    :return: arguments
+    """
+    parser = ArgumentParser(description='t-SNE')
+    parser.add_argument('-i', '--image', help='Path to image file', default='data/mnist/mnist2500_X.txt', type=str)
+    parser.add_argument('-l', '--label', help='Path to label file', default='data/mnist/mnist2500_labels.txt', type=str)
+    parser.add_argument('-v', '--verbosity', help='verbosity level (0-1)', default=0, type=check_int_range)
+
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    print("Run Y = tsne.tsne(X, no_dims, perplexity) to perform t-SNE on your dataset.")
-    print("Running example on 2,500 MNIST digits...")
-    X = np.loadtxt("mnist2500_X.txt")
-    labels = np.loadtxt("mnist2500_labels.txt")
-    Y = tsne(X, 2, 50, 20.0)
-    pylab.scatter(Y[:, 0], Y[:, 1], 20, labels)
-    pylab.show()
+    """
+    Main function
+        command: python3 tsne.py [-i image_file] [-l label_file] [-v (0-1)]
+    """
+    # Parse arguments
+    args = parse_arguments()
+    image_file = args.image
+    label_file = args.label
+    verbosity = args.verbosity
+
+    x = np.loadtxt(image_file)
+    label_of_x = np.loadtxt(label_file)
+    try:
+        y = tsne(x, 2, 50, 20.0)
+        plt.scatter(y[:, 0], y[:, 1], 20, label_of_x)
+        plt.show()
+    except ValueError:
+        pass

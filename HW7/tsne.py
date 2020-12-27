@@ -12,11 +12,13 @@
 #  Created by Laurens van der Maaten on 20-12-08.
 #  Copyright (c) 2008 Tilburg University. All rights reserved.
 
+import sys
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from typing import Tuple
+from PIL import Image
 
 
 def h_beta(data: np.ndarray, beta: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
@@ -35,7 +37,7 @@ def h_beta(data: np.ndarray, beta: float = 1.0) -> Tuple[np.ndarray, np.ndarray]
     return h, p
 
 
-def x2p(matrix_x: np.ndarray, tol: float = 1e-5, perplexity: float = 30.0) -> np.ndarray:
+def x2p(matrix_x: np.ndarray, tol: float = 1e-5, perplexity: float = 20.0) -> np.ndarray:
     """
     Performs a binary search to get P-values in such a way that each conditional Gaussian has the same perplexity.
     :param matrix_x: matrix x
@@ -111,11 +113,14 @@ def pca(matrix_x: np.ndarray, no_dims: int = 50) -> np.ndarray:
     return matrix_y
 
 
-def tsne(images: np.ndarray, no_dims: int = 2, initial_dims: int = 50, perplexity: float = 30.0) -> np.ndarray:
+def tsne(images: np.ndarray, labels: np.ndarray, mode: int, no_dims: int = 2, initial_dims: int = 50,
+         perplexity: float = 20.0) -> np.ndarray:
     """
     t-SNE
     Run t-SNE on the dataset in the NxD matrix images to reduce its dimensionality to no_dims dimensions.
     :param images: images
+    :param labels: labels
+    :param mode: 0 for t-SNE, 1 for symmetric SNE
     :param no_dims: number of dimensions
     :param initial_dims: initial dimensions
     :param perplexity: perplexity
@@ -141,6 +146,9 @@ def tsne(images: np.ndarray, no_dims: int = 2, initial_dims: int = 50, perplexit
     d_y = np.zeros((n, no_dims))
     i_y = np.zeros((n, no_dims))
     gains = np.ones((n, no_dims))
+
+    # List storing images of clustering state
+    img = []
 
     # Compute P-values
     p = x2p(matrix_x, 1e-5, perplexity)
@@ -181,13 +189,38 @@ def tsne(images: np.ndarray, no_dims: int = 2, initial_dims: int = 50, perplexit
         if (iteration + 1) % 10 == 0:
             c = np.sum(p * np.log(p / q))
             info_log(f'Iteration {iteration + 1}: error is {c}...')
+            img.append(capture_current_state(solution_y, labels, mode, perplexity))
 
         # Stop lying about P-values
         if iter == 100:
             p = p / 4.
 
+    # Save gif
+    filename = f'./output/{"t-SNE" if not m else "symmetric-SNE"}_{perplexity}.gif'
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=200)
+
     # Return solution
     return solution_y
+
+
+def capture_current_state(solution_y: np.ndarray, labels: np.ndarray, mode: int, perplexity: float) -> Image:
+    """
+    Capture current state
+    :param solution_y: current solution
+    :param labels: labels of images
+    :param mode: 0 for t-SNE, 1 for symmetric SNE
+    :param perplexity: perplexity
+    :return: an image of current state
+    """
+    plt.clf()
+    plt.scatter(solution_y[:, 0], solution_y[:, 1], 20, labels)
+    plt.title(f'{"t-SNE" if not mode else "symmetric SNE"}, perplexity = {perplexity}')
+    plt.tight_layout()
+    canvas = plt.get_current_fig_manager().canvas
+    canvas.draw()
+
+    return Image.frombytes('RGB', canvas.get_width_height(), canvas.tostring_rgb())
 
 
 def info_log(log: str) -> None:
@@ -231,6 +264,9 @@ def parse_arguments() -> Namespace:
     parser = ArgumentParser(description='t-SNE')
     parser.add_argument('-i', '--image', help='Path to image file', default='data/mnist/mnist2500_X.txt', type=str)
     parser.add_argument('-l', '--label', help='Path to label file', default='data/mnist/mnist2500_labels.txt', type=str)
+    parser.add_argument('-m', '--mode', help='Mode for SNE, 0: t-SNE, 1: symmetric SNE', default=0,
+                        type=check_int_range)
+    parser.add_argument('-p', '--perplexity', help='perplexity', default=20.0, type=float)
     parser.add_argument('-v', '--verbosity', help='verbosity level (0-1)', default=0, type=check_int_range)
 
     return parser.parse_args()
@@ -239,19 +275,24 @@ def parse_arguments() -> Namespace:
 if __name__ == "__main__":
     """
     Main function
-        command: python3 tsne.py [-i image_file] [-l label_file] [-v (0-1)]
+        command: python3 tsne.py [-i image_file] [-l label_file] [-m (0-1)] [-p perplexity] [-v (0-1)]
     """
     # Parse arguments
     args = parse_arguments()
     image_file = args.image
     label_file = args.label
+    m = args.mode
+    pp = args.perplexity
     verbosity = args.verbosity
 
     x = np.loadtxt(image_file)
     label_of_x = np.loadtxt(label_file)
     try:
-        y = tsne(x, 2, 50, 20.0)
+        y = tsne(x, label_of_x, m, 2, 50, pp)
+        plt.clf()
         plt.scatter(y[:, 0], y[:, 1], 20, label_of_x)
+        plt.title(f'{"t-SNE" if not m else "symmetric SNE"}, perplexity = {pp}')
+        plt.tight_layout()
         plt.show()
     except ValueError:
         pass

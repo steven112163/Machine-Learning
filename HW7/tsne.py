@@ -200,6 +200,9 @@ def tsne(images: np.ndarray, labels: np.ndarray, mode: int, no_dims: int = 2, in
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     img[0].save(filename, save_all=True, append_images=img[1:], optimize=False, loop=0, duration=200)
 
+    # Plot pairwise similarities in high-dimensional space and low-dimensional space
+    draw_similarities(p, q, labels)
+
     # Return solution
     return solution_y
 
@@ -221,6 +224,38 @@ def capture_current_state(solution_y: np.ndarray, labels: np.ndarray, mode: int,
     canvas.draw()
 
     return Image.frombytes('RGB', canvas.get_width_height(), canvas.tostring_rgb())
+
+
+def draw_similarities(p: np.ndarray, q: np.ndarray, labels: np.ndarray) -> None:
+    """
+    Draw similarities
+    :param p: p
+    :param q: q
+    :param labels: labels
+    :return: None
+    """
+    # Get sorted index
+    index = np.argsort(labels)
+    plt.clf()
+    plt.figure(1)
+
+    # Plot p
+    log_p = np.log(p)
+    sorted_p = log_p[index][:, index]
+    plt.subplot(121)
+    img = plt.imshow(sorted_p, cmap='gray', vmin=np.min(log_p), vmax=np.max(log_p))
+    plt.colorbar(img)
+    plt.title('High-dimensional space')
+
+    # Plot q
+    log_q = np.log(q)
+    sorted_q = log_q[index][:, index]
+    plt.subplot(122)
+    img = plt.imshow(sorted_q, cmap='gray', vmin=np.min(log_q), vmax=np.max(log_q))
+    plt.colorbar(img)
+    plt.title('Low-dimensional space')
+
+    plt.tight_layout()
 
 
 def info_log(log: str) -> None:
@@ -289,7 +324,7 @@ if __name__ == "__main__":
     label_of_x = np.loadtxt(label_file)
     try:
         y = tsne(x, label_of_x, m, 2, 50, pp)
-        plt.clf()
+        plt.figure(2)
         plt.scatter(y[:, 0], y[:, 1], 20, label_of_x)
         plt.title(f'{"t-SNE" if not m else "symmetric SNE"}, perplexity = {pp}')
         plt.tight_layout()

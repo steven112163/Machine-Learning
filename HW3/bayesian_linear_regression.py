@@ -266,7 +266,7 @@ def parse_arguments():
     Parse all arguments
     :return: arguments
     """
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Bayesian linear regression')
     parser.add_argument('n', help='basis number', default=1, type=int)
     parser.add_argument('a', help='variance', default=1.0, type=float)
     parser.add_argument('m', help='weight', nargs='+', type=check_float)

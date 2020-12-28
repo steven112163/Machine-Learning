@@ -87,7 +87,7 @@ def parse_arguments():
     Parse all arguments
     :return: arguments
     """
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Sequential estimator')
     parser.add_argument('m', help='expectation value or mean', default=0.0, type=float)
     parser.add_argument('s', help='variance', default=1.0, type=float)
     parser.add_argument('-m', '--mode', help='0: sequential estimator, 1: univariate gaussian data generator',

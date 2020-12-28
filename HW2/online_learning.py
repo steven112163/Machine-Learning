@@ -89,12 +89,12 @@ def parse_arguments():
     Setup an ArgumentParser and get arguments from command-line
     :return: arguments
     """
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Online learning')
     parser.add_argument('-f', '--filename', help='File of binary outcomes', default='data/testfile.txt',
                         type=argparse.FileType('r'))
     parser.add_argument('a', help='Parameter a of initial beta prior', type=int)
     parser.add_argument('b', help='Parameter b of initial beta prior', type=int)
-    parser.add_argument('-v', '--verbosity', help='verbosity leve (0-1)', default=0, type=check_int_range)
+    parser.add_argument('-v', '--verbosity', help='verbosity level (0-1)', default=0, type=check_int_range)
 
     return parser.parse_args()
 

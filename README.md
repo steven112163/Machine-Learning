@@ -1,7 +1,10 @@
-# Machine-Learning
+# Machine-Learning  
 HWs of Machine Learning Fall 2020 NCTU 機器學習 5258
 
-## Prerequisites
+
+
+## Prerequisites  
+* python >= 3.6
 * numpy >= 1.19.2
 * matplotlib >= 3.3.2
 * scipy >= 1.5.4

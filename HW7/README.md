@@ -3,7 +3,7 @@
 
 
 ## Kernel Eigenfaces  
-|Parameter|Description|Default|
+|Argument|Description|Default|
 |---|---|---|
 |-i, --image|Name of the directory containing images|'data/Yale_Face_Database|
 |-algo, --algorithm|Algorithm to be used|0 (0: PCA, 1: LDA)|
@@ -17,13 +17,15 @@
 $ python3 kernel_eigenfaces.py [-i name_of_directory] [-algo (0-1)] [-m (0-1)] [-k neighbors] [-ker (0-1)] [-g gamma] [-v (0-1)]
 ```
 
+
+
 ## t-SNE  
 Original t-SNE code is from [t-SNE](https://lvdmaaten.github.io/tsne/).  
 
-|Parameter|Description|Default|
+|Argument|Description|Default|
 |---|---|---|
-|-i, --image|Path to image file|'data/mnist/mnist2500_X.txt', type=str)
-|-l, --label|Path to label file|'data/mnist/mnist2500_labels.txt', type=str)
+|-i, --image|Path to image file|'data/mnist/mnist2500_X.txt'|
+|-l, --label|Path to label file|'data/mnist/mnist2500_labels.txt'|
 |-m, --mode|Mode for SNE|0 (0: t-SNE, 1: symmetric SNE)|
 |-p, --perplexity|perplexity|20.0|
 |-v, --verbosity|verbosity level|0 (0-1)|  

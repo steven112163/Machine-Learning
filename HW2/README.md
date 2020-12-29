@@ -9,7 +9,7 @@
 |-trl, --training_label|File of label training data|'data/train-labels.idx1-ubyte'
 |-tei, --testing_image|File of image testing data|'data/t10k-images.idx3-ubyte'|
 |-tel, --testing_label|File of label testing data|'data/t10k-labels.idx1-ubyte'|
-|-m, --mode|0: discrete mode, 1: continuous mode|0|
+|-m, --mode|0: discrete mode, 1: continuous mode|0 (0-1)|
 |-v, --verbosity|verbosity level|0 (0-1)|  
 
 ```shell script

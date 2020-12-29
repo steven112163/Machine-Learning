@@ -7,7 +7,7 @@
 |---|---|---|
 |m|expectation value or mean|0.0|
 |s|variance|1.0|
-|-m, --mode|0: sequential estimator, 1: univariate gaussian data generator|0|
+|-m, --mode|0: sequential estimator, 1: univariate gaussian data generator|0 (0-1)|
 |-v, --verbosity|verbosity level|0 (0-1)|  
 
 ```shell script

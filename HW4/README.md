@@ -14,7 +14,7 @@
 |vx2|variance x in D2|None|
 |my2|mean of y in D2|None|
 |vy2|variance of y in D2|None|
-|-m, --mode|0: logistic regression, 1: univariate gaussian data generator|0|
+|-m, --mode|0: logistic regression, 1: univariate gaussian data generator|0 (0-1)|
 |-v, --verbosity|verbosity level|0 (0-1)|  
 
 ```shell script
